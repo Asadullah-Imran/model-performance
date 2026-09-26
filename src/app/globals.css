@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Light Theme Variables (Default) */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-glass: rgba(255, 255, 255, 0.85);
+  --border-color: rgba(15, 23, 42, 0.08);
+  --border-glow: rgba(15, 23, 42, 0.12);
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  
+  /* Model Palette (Vibrant Accents) */
+  --smart-base: 262;
+  --smart-color: hsl(var(--smart-base), 75%, 55%);
+  --smart-glow: hsla(var(--smart-base), 75%, 55%, 0.15);
+  --smart-bg-soft: hsla(var(--smart-base), 75%, 55%, 0.08);
+
+  --cage-base: 160;
+  --cage-color: hsl(var(--cage-base), 84%, 38%);
+  --cage-glow: hsla(var(--cage-base), 84%, 38%, 0.15);
+  --cage-bg-soft: hsla(var(--cage-base), 84%, 38%, 0.08);
+
+  --arise-base: 343;
+  --arise-color: hsl(var(--arise-base), 85%, 50%);
+  --arise-glow: hsla(var(--arise-base), 85%, 50%, 0.15);
+  --arise-bg-soft: hsla(var(--arise-base), 85%, 50%, 0.08);
+
+  --arisesill-base: 315;
+  --arisesill-color: hsl(var(--arisesill-base), 85%, 50%);
+  --arisesill-glow: hsla(var(--arisesill-base), 85%, 50%, 0.15);
+  --arisesill-bg-soft: hsla(var(--arisesill-base), 85%, 50%, 0.08);
+
+  --spatialglue-base: 38;
+  --spatialglue-color: hsl(var(--spatialglue-base), 92%, 46%);
+  --spatialglue-glow: hsla(var(--spatialglue-base), 92%, 46%, 0.15);
+  --spatialglue-bg-soft: hsla(var(--spatialglue-base), 92%, 46%, 0.08);
+
+  --nopcasmart-base: 195;
+  --nopcasmart-color: hsl(var(--nopcasmart-base), 85%, 45%);
+  --nopcasmart-glow: hsla(var(--nopcasmart-base), 85%, 45%, 0.15);
+  --nopcasmart-bg-soft: hsla(var(--nopcasmart-base), 85%, 45%, 0.08);
+
+  /* UI Colors */
+  --accent: #4f46e5;
+  --accent-glow: rgba(79, 70, 229, 0.15);
+  --success: #059669;
+  --warning: #d97706;
+  --danger: #dc2626;
+  
+  --shadow-premium: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.dark, body.dark-theme, html.dark {
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #13192b;
+  --bg-tertiary: #1b233a;
+  --bg-glass: rgba(19, 25, 43, 0.75);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(255, 255, 255, 0.15);
+  
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  --smart-color: hsl(var(--smart-base), 85%, 66%);
+  --smart-glow: hsla(var(--smart-base), 85%, 66%, 0.2);
+  --smart-bg-soft: hsla(var(--smart-base), 85%, 66%, 0.1);
+
+  --cage-color: hsl(var(--cage-base), 84%, 45%);
+  --cage-glow: hsla(var(--cage-base), 84%, 45%, 0.2);
+  --cage-bg-soft: hsla(var(--cage-base), 84%, 45%, 0.1);
+
+  --arise-color: hsl(var(--arise-base), 90%, 60%);
+  --arise-glow: hsla(var(--arise-base), 90%, 60%, 0.2);
+  --arise-bg-soft: hsla(var(--arise-base), 90%, 60%, 0.1);
+
+  --arisesill-color: hsl(var(--arisesill-base), 90%, 60%);
+  --arisesill-glow: hsla(var(--arisesill-base), 90%, 60%, 0.2);
+  --arisesill-bg-soft: hsla(var(--arisesill-base), 90%, 60%, 0.1);
+
+  --spatialglue-color: hsl(var(--spatialglue-base), 95%, 55%);
+  --spatialglue-glow: hsla(var(--spatialglue-base), 95%, 55%, 0.2);
+  --spatialglue-bg-soft: hsla(var(--spatialglue-base), 95%, 55%, 0.1);
+
+  --nopcasmart-color: hsl(var(--nopcasmart-base), 90%, 55%);
+  --nopcasmart-glow: hsla(var(--nopcasmart-base), 90%, 55%, 0.2);
+  --nopcasmart-bg-soft: hsla(var(--nopcasmart-base), 90%, 55%, 0.1);
+
+  --accent: #6366f1;
+  --accent-glow: rgba(99, 102, 241, 0.25);
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  
+  --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Glassmorphism panel styling */
+.glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-premium);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-panel-hover:hover {
+  border-color: var(--border-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.15);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
