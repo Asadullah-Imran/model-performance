@@ -489,6 +489,11 @@ def train_model_dec(
     epoch_ari_history = []
     epoch_nmi_history = []
 
+    best_sil = -float('inf')
+    best_epoch = 1
+    best_embeddings = None
+    best_labels = None
+
     print(f"\n{'='*75}\n[Stage 1/2] Gated Fusion Pre-training ({pretrain_epochs} Epochs)\n{'='*75}")
     for epoch in range(pretrain_epochs):
         model.train()
@@ -525,10 +530,16 @@ def train_model_dec(
         epoch_ari_history.append(ari)
         epoch_nmi_history.append(nmi)
 
+        if sil > best_sil:
+            best_sil = sil
+            best_epoch = epoch + 1
+            best_embeddings = epoch_emb.copy()
+            best_labels = epoch_labels.copy()
+
         if (epoch + 1) % 25 == 0 or epoch == 0 or (epoch + 1) == pretrain_epochs:
             print(f"Pretrain Ep {epoch+1:3d}/{pretrain_epochs} | Tot: {loss.item():.4f} | Rec: {l_rec_val.item():.4f} | Spat: {l_sp_val.item():.4f} | Sil: {sil:.4f} | ARI: {ari:.4f}")
 
-    # Initialize DEC Prototypes
+    # Initialize DEC Prototypes using representations corresponding to best pretraining state
     model.eval()
     with torch.no_grad():
         _, _, _, fused_pro_best, _, _, _ = model(data, compute_dec=False)
@@ -605,16 +616,36 @@ def train_model_dec(
         epoch_ari_history.append(ari)
         epoch_nmi_history.append(nmi)
 
+        if sil > best_sil:
+            best_sil = sil
+            best_epoch = curr_epoch
+            best_embeddings = epoch_emb.copy()
+            best_labels = epoch_labels.copy()
+
         if (epoch + 1) % 25 == 0 or epoch == 0 or (epoch + 1) == finetune_epochs:
             print(f"DEC Ep {epoch+1:3d}/{finetune_epochs} (Total {curr_epoch:3d}) | Tot: {loss.item():.4f} | Rec: {l_rec_val.item():.4f} | Spat: {l_sp_val.item():.4f} | KL: {kl_val:.4f} | Sil: {sil:.4f} | ARI: {ari:.4f}")
 
-    # Final representations from last epoch
-    final_embeddings = epoch_emb.copy()
-    final_labels = epoch_labels.copy()
-
+    # Final representations selected from the Best Silhouette Score Epoch
     total_epochs = pretrain_epochs + finetune_epochs
+    if best_embeddings is None:
+        best_embeddings = epoch_emb.copy()
+        best_labels = epoch_labels.copy()
+        best_sil = epoch_sil_history[-1] if epoch_sil_history else 0.0
+        best_epoch = total_epochs
+
+    final_embeddings = best_embeddings
+    final_labels = best_labels
+
+    print("\n" + "=" * 75)
+    print(f"🎯 BEST SILHOUETTE SCORE SUMMARY: Epoch {best_epoch}/{total_epochs} | Silhouette: {best_sil:.4f}")
+    print("=" * 75 + "\n")
+
     training_results = {
         'total_epochs': total_epochs,
+        'best_epoch': best_epoch,
+        'best_sil': best_sil,
+        'best_embeddings': best_embeddings,
+        'best_labels': best_labels,
         'loss_history': loss_history,
         'recon_loss_history': recon_loss_history,
         'spatial_loss_history': spatial_loss_history,
@@ -655,9 +686,10 @@ def plot_training_curves(training_results: dict, dataset_name="Dataset", save_pa
     axes[0].legend(frameon=True, fontsize='small', loc='upper right')
 
     # 2. Silhouette Score Curve
-    final_sil = training_results['epoch_sil_history'][-1] if training_results['epoch_sil_history'] else 0.0
+    best_epoch = training_results.get('best_epoch', len(epochs_range))
+    best_sil = training_results.get('best_sil', training_results['epoch_sil_history'][-1] if training_results.get('epoch_sil_history') else 0.0)
     axes[1].plot(epochs_range, training_results['epoch_sil_history'], color='#2ca02c', linewidth=2.0, label='Silhouette Score')
-    axes[1].scatter([len(epochs_range)], [final_sil], color='#2ca02c', s=40, zorder=5, label=f'Final Sil: {final_sil:.4f}')
+    axes[1].scatter([best_epoch], [best_sil], color='#e11d48', s=50, zorder=5, label=f'Best Sil (Ep {best_epoch}): {best_sil:.4f}')
     axes[1].set_title(f'Silhouette Score Curve - {dataset_name}', fontsize=12, fontweight='bold', pad=10)
     axes[1].set_xlabel('Epoch', fontsize=11)
     axes[1].set_ylabel('Silhouette Score', fontsize=11)
@@ -666,9 +698,10 @@ def plot_training_curves(training_results: dict, dataset_name="Dataset", save_pa
 
     # 3. ARI Curve
     if has_ari:
-        final_ari = training_results['epoch_ari_history'][-1] if training_results['epoch_ari_history'] else 0.0
+        best_ep_idx = min(max(0, best_epoch - 1), len(training_results['epoch_ari_history']) - 1)
+        best_ep_ari = training_results['epoch_ari_history'][best_ep_idx] if training_results.get('epoch_ari_history') else 0.0
         axes[2].plot(epochs_range, training_results['epoch_ari_history'], color='#ff7f0e', linewidth=2.0, label='Epoch ARI')
-        axes[2].scatter([len(epochs_range)], [final_ari], color='#ff7f0e', s=40, zorder=5, label=f'Final ARI: {final_ari:.4f}')
+        axes[2].scatter([best_epoch], [best_ep_ari], color='#e11d48', s=50, zorder=5, label=f'ARI at Best Sil (Ep {best_epoch}): {best_ep_ari:.4f}')
         axes[2].set_title(f'ARI Curve - {dataset_name}', fontsize=12, fontweight='bold', pad=10)
         axes[2].set_xlabel('Epoch', fontsize=11)
         axes[2].set_ylabel('Adjusted Rand Index (ARI)', fontsize=11)
@@ -845,6 +878,9 @@ def export_dashboard_experiment(
     safe_history = make_json_serializable(history_points)
     safe_embeddings = make_json_serializable(embeddings_data or {})
 
+    best_epoch = int(training_results.get("best_epoch", training_results.get("total_epochs", 0)))
+    best_score = float(training_results.get("best_sil", metrics_dict.get("Silhouette", 0.0)))
+
     # 2. Local JSON Files Save
     with open(os.path.join(exp_dir, "metrics.json"), "w") as f:
         json.dump({
@@ -852,6 +888,8 @@ def export_dashboard_experiment(
             "dataset": dataset_name,
             "seed": int(seed),
             "final_epoch": int(training_results.get("total_epochs", 0)),
+            "best_epoch": best_epoch,
+            "best_score": best_score,
             "metrics": safe_metrics
         }, f, indent=2)
 
@@ -877,8 +915,8 @@ def export_dashboard_experiment(
                 "datasetId": dataset_name,
                 "datasetName": dataset_name.replace("_", " ").title(),
                 "seed": int(seed),
-                "bestEpoch": int(training_results.get("total_epochs", 0)),
-                "bestScore": float(metrics_dict.get("Silhouette", 0.0)),
+                "bestEpoch": best_epoch,
+                "bestScore": best_score,
                 "finalMetrics": safe_metrics,
                 "history": safe_history,
                 "embeddingsData": safe_embeddings,
@@ -1072,12 +1110,14 @@ def run_experiment(
             duration = time.time() - start_time
 
             metrics = evaluate_clustering(final_emb, final_labels, gt_labels_array)
-            print(f"✨ Evaluation Results (Final Epoch):")
-            print(f"  • ARI        : {metrics.get('ARI', 0.0):.4f}")
+            best_ep = training_results.get('best_epoch', pretrain_epochs + finetune_epochs)
+            print(f"✨ Evaluation Results (Derived from Best Silhouette Epoch {best_ep}):")
             print(f"  • Silhouette : {metrics.get('Silhouette', 0.0):.4f}")
+            print(f"  • ARI        : {metrics.get('ARI', 0.0):.4f}")
             print(f"  • NMI        : {metrics.get('NMI', 0.0):.4f}")
             print(f"  • AMI        : {metrics.get('AMI', 0.0):.4f}")
             print(f"  • Homogeneity: {metrics.get('Homogeneity', 0.0):.4f}")
+            print(f"  • Best Epoch : {best_ep}")
             print(f"  • Duration   : {duration:.2f}s")
 
             if visualize:
@@ -1138,8 +1178,9 @@ def run_experiment(
             res_row = {
                 'dataset': dataset_name,
                 'seed': seed,
-                'ARI': metrics.get('ARI', 0.0),
+                'best_epoch': best_ep,
                 'Silhouette': metrics.get('Silhouette', 0.0),
+                'ARI': metrics.get('ARI', 0.0),
                 'NMI': metrics.get('NMI', 0.0),
                 'Duration_s': round(duration, 2)
             }
