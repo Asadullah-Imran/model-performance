@@ -476,12 +476,6 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     combined_raw = torch.cat([data.x_RNA, data.x_ADT], dim=1)
 
-    best_sil = -1.0
-    best_epoch = 0
-    best_ari = 0.0
-    best_embeddings = None
-    best_labels = None
-
     loss_history = []
     epoch_sil_history = []
     epoch_ari_history = []
@@ -727,10 +721,10 @@ def plot_all_visualizations(
         plt.close()
 
     # 4. 🎻 Violin Plots: Silhouette Coefficients & Latent Features
-    sample_sil_values = silhouette_samples(best_embeddings, best_labels)
+    sample_sil_values = silhouette_samples(final_embeddings, final_labels)
     adata_RNA.obs['silhouette_coefficient'] = sample_sil_values
-    adata_RNA.obs['Latent_Dim_1'] = best_embeddings[:, 0]
-    adata_RNA.obs['Latent_Dim_2'] = best_embeddings[:, 1]
+    adata_RNA.obs['Latent_Dim_1'] = final_embeddings[:, 0]
+    adata_RNA.obs['Latent_Dim_2'] = final_embeddings[:, 1]
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 5.5))
     sns.violinplot(
