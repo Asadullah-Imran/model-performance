@@ -429,6 +429,7 @@ class Dual4Encoder1Layer(nn.Module):
         l_dist = F.mse_loss(x_RNA, self.gcn.reconstruct(x_dist))
         l_aux_s = F.mse_loss(x_ADT, self.gcn.reconstruct2(aux_s))
         l_aux_d = F.mse_loss(x_ADT, self.gcn.reconstruct2(aux_d))
+        l_rec_total = l_rec + l_sim + l_dist + l_aux_s + l_aux_d
 
         l_spatial = self.spatial_regularization_loss(
             fused_rna,
@@ -438,11 +439,13 @@ class Dual4Encoder1Layer(nn.Module):
 
         reg_loss = self.compute_regularization_loss()
 
-        total_loss = (self.beta * (l_rec + l_sim + l_dist + l_aux_s + l_aux_d) +
-                      self.gamma * l_spatial +
-                      self.delta * reg_loss)
+        recon_component = self.beta * l_rec_total
+        spatial_component = self.gamma * l_spatial
+        reg_component = self.delta * reg_loss
 
-        return total_loss, l_rec
+        total_loss = recon_component + spatial_component + reg_component
+
+        return total_loss, recon_component, spatial_component, reg_component
 
 
 # ==============================================================================
@@ -477,6 +480,9 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
     combined_raw = torch.cat([data.x_RNA, data.x_ADT], dim=1)
 
     loss_history = []
+    recon_loss_history = []
+    spatial_loss_history = []
+    reg_loss_history = []
     epoch_sil_history = []
     epoch_ari_history = []
 
@@ -494,7 +500,7 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
         )
 
         model.gcn_input = data
-        loss, l_rec = model.compute_losses(
+        loss, l_rec_val, l_spatial_val, reg_loss_val = model.compute_losses(
             data.x_RNA, data.x_ADT,
             x_sim, x_dist, aux_s, aux_d,
             fused_rna, fused_aux, fused_pro,
@@ -504,6 +510,9 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
         loss.backward()
         optimizer.step()
         loss_history.append(loss.item())
+        recon_loss_history.append(l_rec_val.item())
+        spatial_loss_history.append(l_spatial_val.item())
+        reg_loss_history.append(reg_loss_val.item())
 
         embeddings, _, _ = evaluate_model(model, data)
         pred_labels = cluster_embeddings(embeddings, num_clusters, random_state=42)
@@ -523,7 +532,7 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
 
         if verbose and ((epoch + 1) % 10 == 0 or epoch == 0 or epoch == epochs - 1):
             ari_str = f" | ARI: {ari:.4f}" if ari is not None else ""
-            tqdm.write(f"Epoch {epoch + 1:4d}/{epochs} | Total Loss: {loss.item():.4f} | Recon Loss: {l_rec.item():.4f} | Silhouette: {sil:.4f}{ari_str}")
+            tqdm.write(f"Epoch {epoch + 1:4d}/{epochs} | Total Loss: {loss.item():.4f} | Recon Loss: {l_rec_val.item():.4f} | Silhouette: {sil:.4f}{ari_str}")
 
     # Use Last Epoch Embeddings and Cluster Assignments
     final_embeddings = embeddings.copy()
@@ -542,6 +551,9 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
         print(" MODEL TRAINING FINISHED - LAST EPOCH SUMMARY ".center(65, "="))
         print("=" * 65)
         print(f"Final Epoch ({epochs}) Total Loss      : {loss.item():.4f}")
+        print(f"  • Reconstruction Loss       : {recon_loss_history[-1]:.4f}")
+        print(f"  • Spatial Regularization    : {spatial_loss_history[-1]:.4f}")
+        print(f"  • Weight Decay Regulariz.   : {reg_loss_history[-1]:.4f}")
         print(f"Last Epoch Silhouette Score   : {last_sil:.4f}")
         if true_labels is not None:
             print(f"Last Epoch ARI                : {final_ari:.4f}")
@@ -558,6 +570,9 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
         'last_sil': last_sil,
         'last_ari': final_ari,
         'loss_history': loss_history,
+        'recon_loss_history': recon_loss_history,
+        'spatial_loss_history': spatial_loss_history,
+        'reg_loss_history': reg_loss_history,
         'epoch_sil_history': epoch_sil_history,
         'epoch_ari_history': epoch_ari_history
     }
@@ -814,8 +829,11 @@ def export_dashboard_experiment(
     exp_dir = os.path.join(output_dir, "experiments", model_id, dataset_name, f"seed_{seed}")
     os.makedirs(exp_dir, exist_ok=True)
 
-    # 1. Curves History
+    # 1. Curves History (Multi-Loss decomposition + Metric trajectories)
     loss_hist = training_results.get("loss_history", [])
+    recon_hist = training_results.get("recon_loss_history", [])
+    spatial_hist = training_results.get("spatial_loss_history", [])
+    reg_hist = training_results.get("reg_loss_history", [])
     sil_hist = training_results.get("epoch_sil_history", [])
     ari_hist = training_results.get("epoch_ari_history", [])
 
@@ -823,6 +841,17 @@ def export_dashboard_experiment(
     for ep in range(len(loss_hist)):
         history_points.append({
             "epoch": ep + 1,
+            "losses": {
+                "total_loss": float(loss_hist[ep]) if ep < len(loss_hist) else 0.0,
+                "reconstruction_loss": float(recon_hist[ep]) if ep < len(recon_hist) else 0.0,
+                "spatial_loss": float(spatial_hist[ep]) if ep < len(spatial_hist) else 0.0,
+                "reg_loss": float(reg_hist[ep]) if ep < len(reg_hist) else 0.0,
+            },
+            "metrics": {
+                "Silhouette": float(sil_hist[ep]) if ep < len(sil_hist) else 0.0,
+                "ARI": float(ari_hist[ep]) if ep < len(ari_hist) else 0.0,
+            },
+            # Flat attributes for legacy compatibility
             "total_loss": float(loss_hist[ep]) if ep < len(loss_hist) else None,
             "silhouette": float(sil_hist[ep]) if ep < len(sil_hist) else None,
             "ari": float(ari_hist[ep]) if ep < len(ari_hist) else None,

@@ -25,6 +25,12 @@ export default function CurvesPage() {
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   const [curveMetric, setCurveMetric] = useState<string>('ARI');
   const [showAllSeeds, setShowAllSeeds] = useState<boolean>(true);
+  const [visibleLosses, setVisibleLosses] = useState<Record<string, boolean>>({
+    total_loss: true,
+    reconstruction_loss: true,
+    spatial_loss: true,
+    reg_loss: true,
+  });
 
   const isDark = theme === 'dark';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
@@ -37,6 +43,23 @@ export default function CurvesPage() {
   // Extract epoch labels from the first seed history
   const epochLabels = (seedList[0]?.history || []).map(h => `Ep ${h.epoch}`);
 
+  // Robust metric & loss value extractors (supports nested & legacy flat records)
+  const getMetricVal = (h: any, key: string) => {
+    if (!h) return 0;
+    if (h.metrics && h.metrics[key] !== undefined) return h.metrics[key];
+    if (key.toLowerCase() === 'ari' && h.ari !== undefined) return h.ari;
+    if (key.toLowerCase() === 'silhouette' && h.silhouette !== undefined) return h.silhouette;
+    if (key.toLowerCase() === 'nmi' && h.nmi !== undefined) return h.nmi;
+    return 0;
+  };
+
+  const getLossVal = (h: any, key: string) => {
+    if (!h) return 0;
+    if (h.losses && h.losses[key] !== undefined) return h.losses[key];
+    if (key === 'total_loss' && h.total_loss !== undefined) return h.total_loss;
+    return 0;
+  };
+
   // Metric Curve with SEM shaded ribbon
   const metricChartData = useMemo(() => {
     if (seedList.length === 0 || !selectedModel) return { labels: [], datasets: [] };
@@ -47,7 +70,7 @@ export default function CurvesPage() {
     const lowerSEM: number[] = [];
 
     for (let i = 0; i < epochsCount; i++) {
-      const valsAtEpoch = seedList.map(s => s.history[i]?.metrics[curveMetric] ?? 0);
+      const valsAtEpoch = seedList.map(s => getMetricVal(s.history[i], curveMetric));
       const mean = calculateMean(valsAtEpoch);
       const sem = calculateSEM(valsAtEpoch);
       meanValues.push(Number(mean.toFixed(4)));
@@ -59,8 +82,8 @@ export default function CurvesPage() {
 
     // Individual seed traces
     if (showAllSeeds) {
-      seedList.slice(0, 8).forEach((seedData, idx) => {
-        const seedVals = seedData.history.map(h => h.metrics[curveMetric] ?? 0);
+      seedList.slice(0, 8).forEach((seedData) => {
+        const seedVals = seedData.history.map(h => getMetricVal(h, curveMetric));
         datasets.push({
           label: `Seed ${seedData.seed}`,
           data: seedVals,
@@ -117,7 +140,8 @@ export default function CurvesPage() {
     if (seedList.length === 0) return { labels: [], datasets: [] };
 
     const epochsCount = seedList[0]?.history?.length || 0;
-    const lossComponents = ['total_loss', 'reconstruction_loss', 'spatial_loss', 'reg_loss'];
+    const lossComponents = ['total_loss', 'reconstruction_loss', 'spatial_loss', 'reg_loss']
+      .filter(k => visibleLosses[k] !== false);
 
     const datasets = lossComponents.map(lossKey => {
       const def = LOSS_REGISTRY.find(l => l.key === lossKey) || {
@@ -127,7 +151,7 @@ export default function CurvesPage() {
 
       const meanLosses: number[] = [];
       for (let i = 0; i < epochsCount; i++) {
-        const vals = seedList.map(s => s.history[i]?.losses[lossKey] ?? 0);
+        const vals = seedList.map(s => getLossVal(s.history[i], lossKey));
         meanLosses.push(Number(calculateMean(vals).toFixed(4)));
       }
 
@@ -136,7 +160,7 @@ export default function CurvesPage() {
         data: meanLosses,
         borderColor: def.color,
         backgroundColor: def.color,
-        borderWidth: lossKey === 'total_loss' ? 3 : 1.8,
+        borderWidth: lossKey === 'total_loss' ? 3 : 2,
         pointRadius: 0,
         tension: 0.3,
       };
@@ -146,7 +170,7 @@ export default function CurvesPage() {
       labels: epochLabels,
       datasets,
     };
-  }, [seedList, epochLabels]);
+  }, [seedList, epochLabels, visibleLosses]);
 
   if (models.length === 0 || !selectedModel) {
     return (
@@ -220,14 +244,32 @@ export default function CurvesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Metric vs Epoch with SEM Ribbon */}
         <div className="rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm flex flex-col">
-          <div className="mb-4">
-            <h3 className="text-base font-heading font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-400" />
-              {curveMetric} vs Training Epoch (Mean ± SEM)
-            </h3>
-            <p className="text-xs text-[var(--text-muted)]">
-              Trajectory of clustering metric across training epochs with confidence ribbon
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div>
+              <h3 className="text-base font-heading font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                {curveMetric} vs Training Epoch (Mean ± SEM)
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Trajectory of clustering metric across training epochs with confidence ribbon
+              </p>
+            </div>
+            {/* Metric Filter Pills */}
+            <div className="flex items-center gap-1 bg-[var(--bg-tertiary)] p-1 rounded-xl border border-[var(--border-color)]">
+              {['ARI', 'Silhouette', 'NMI', 'AMI', 'Homogeneity'].map(mKey => (
+                <button
+                  key={mKey}
+                  onClick={() => setCurveMetric(mKey)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    curveMetric === mKey
+                      ? 'bg-emerald-600 text-white shadow-sm scale-105'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]'
+                  }`}
+                >
+                  {mKey === 'Silhouette' ? 'Sil' : mKey}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex-1 min-h-[320px]">
@@ -259,14 +301,45 @@ export default function CurvesPage() {
 
         {/* Multi-Loss Decomposition vs Epoch */}
         <div className="rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm flex flex-col">
-          <div className="mb-4">
-            <h3 className="text-base font-heading font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <Layers className="w-4 h-4 text-indigo-400" />
-              Multi-Loss Component Decomposition
-            </h3>
-            <p className="text-xs text-[var(--text-muted)]">
-              Total, Reconstruction, Spatial Regularization, and Regularization penalty trajectories
-            </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div>
+              <h3 className="text-base font-heading font-bold text-[var(--text-primary)] flex items-center gap-2">
+                <Layers className="w-4 h-4 text-indigo-400" />
+                Multi-Loss Component Decomposition
+              </h3>
+              <p className="text-xs text-[var(--text-muted)]">
+                Filter individual loss components and total loss
+              </p>
+            </div>
+          </div>
+
+          {/* Loss Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-4">
+            {LOSS_REGISTRY.map(loss => {
+              const isVisible = visibleLosses[loss.key] !== false;
+              return (
+                <button
+                  key={loss.key}
+                  onClick={() =>
+                    setVisibleLosses(prev => ({
+                      ...prev,
+                      [loss.key]: !isVisible,
+                    }))
+                  }
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all border ${
+                    isVisible
+                      ? 'bg-[var(--bg-tertiary)] text-[var(--text-primary)] border-[var(--border-color)] shadow-sm'
+                      : 'opacity-40 bg-transparent text-[var(--text-muted)] border-dashed border-[var(--border-color)]'
+                  }`}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: isVisible ? loss.color : '#64748b' }}
+                  />
+                  <span>{loss.name}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="flex-1 min-h-[320px]">
