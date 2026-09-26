@@ -99,6 +99,34 @@ export default function VisualizationsPage() {
     '#22c55e', '#f97316', '#64748b', '#0284c7',
   ];
 
+  // Compute dynamic spot radius based on total spot count
+  const spotRadius = useMemo(() => {
+    const count = spotGrid.length;
+    if (count > 2500) return activeVisType === 'umap' ? 2.0 : 2.5;
+    if (count > 1000) return activeVisType === 'umap' ? 2.8 : 3.2;
+    return activeVisType === 'umap' ? 3.5 : 4.5;
+  }, [spotGrid.length, activeVisType]);
+
+  // Compute actual cluster distribution for the legend
+  const clusterStats = useMemo(() => {
+    const statsMap = new Map<number, { id: number; name: string; count: number; color: string }>();
+    spotGrid.forEach(spot => {
+      const isGt = activeVisType === 'ground_truth';
+      const cId = isGt ? spot.gtCluster : spot.predCluster;
+      const cName = isGt ? spot.rawGt : spot.rawPred;
+      if (!statsMap.has(cId)) {
+        statsMap.set(cId, {
+          id: cId,
+          name: cName,
+          count: 0,
+          color: clusterColors[cId % clusterColors.length],
+        });
+      }
+      statsMap.get(cId)!.count += 1;
+    });
+    return Array.from(statsMap.values()).sort((a, b) => b.count - a.count);
+  }, [spotGrid, activeVisType, clusterColors]);
+
   if (models.length === 0 || !selectedModel) {
     return (
       <div className="p-8 rounded-3xl bg-[var(--bg-secondary)] border border-dashed border-[var(--border-color)] text-center space-y-3">
@@ -148,6 +176,12 @@ export default function VisualizationsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Spot Count Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium">
+            <MapPin className="w-3.5 h-3.5" />
+            <span>{spotGrid.length.toLocaleString()} Spots Rendered</span>
           </div>
         </div>
 
@@ -200,35 +234,36 @@ export default function VisualizationsPage() {
               <h3 className="text-base font-heading font-bold text-[var(--text-primary)]">
                 {activeVisType === 'spatial_map' && `Spatial Clustering Map - ${activeDatasetObj.name}`}
                 {activeVisType === 'umap' && `Joint Latent Space UMAP Embedding - ${selectedModel?.name || ''}`}
-                {activeVisType === 'ground_truth' && `Ground Truth Annotations (${activeDatasetObj.clustersCount} Clusters)`}
+                {activeVisType === 'ground_truth' && `Ground Truth Annotations (${clusterStats.length} Clusters)`}
                 {activeVisType === 'prediction' && `Predicted Domain Boundaries (${selectedModel?.name || ''})`}
                 {activeVisType === 'violin' && `Silhouette Sample Coefficients & Latent Profiles`}
               </h3>
               <span className="text-xs text-[var(--text-muted)]">
-                Dataset: {activeDatasetObj.name} | Model: {selectedModel?.name || ''} | Seed: {selectedSeed}
+                Dataset: {activeDatasetObj.name} | Model: {selectedModel?.name || ''} | Seed: {selectedSeed} ({spotGrid.length} spots)
               </span>
             </div>
           </div>
 
           {/* Interactive Spot Map Render */}
-          <div className="relative w-full max-w-lg aspect-square bg-[var(--bg-tertiary)]/50 rounded-2xl border border-[var(--border-color)] flex items-center justify-center p-4">
+          <div className="relative w-full max-w-xl aspect-[1.15] bg-[var(--bg-tertiary)]/50 rounded-2xl border border-[var(--border-color)] flex items-center justify-center p-4">
             <svg viewBox="0 0 320 280" className="w-full h-full">
               {spotGrid.map((spot, idx) => {
-                const clusterId =
-                  activeVisType === 'ground_truth' ? spot.gtCluster : spot.predCluster;
-                const fill = clusterColors[clusterId];
+                const isGt = activeVisType === 'ground_truth';
+                const clusterId = isGt ? spot.gtCluster : spot.predCluster;
+                const fill = clusterColors[clusterId % clusterColors.length];
+                const labelName = isGt ? spot.rawGt : spot.rawPred;
 
                 return (
                   <circle
                     key={idx}
                     cx={spot.x}
                     cy={spot.y}
-                    r={activeVisType === 'umap' ? 3.5 : 4.5}
+                    r={spotRadius}
                     fill={fill}
-                    className="transition-all duration-200 hover:scale-150 cursor-pointer opacity-90 hover:opacity-100 hover:stroke-white hover:stroke-[1.5]"
+                    className="transition-transform duration-150 hover:scale-[2.5] cursor-pointer opacity-85 hover:opacity-100 hover:stroke-white hover:stroke-[1.5]"
                   >
                     <title>
-                      Spot #{idx} | Cluster: {clusterId} (X: {spot.x.toFixed(0)}, Y: {spot.y.toFixed(0)})
+                      Spot #{idx} | {labelName} (X: {spot.x.toFixed(1)}, Y: {spot.y.toFixed(1)})
                     </title>
                   </circle>
                 );
@@ -238,29 +273,39 @@ export default function VisualizationsPage() {
         </div>
 
         {/* Legend & Cluster Metadata Panel */}
-        <div className="lg:col-span-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm flex flex-col">
-          <h3 className="text-base font-heading font-bold text-[var(--text-primary)] mb-1">
-            Cluster Domains
-          </h3>
+        <div className="lg:col-span-4 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm flex flex-col max-h-[560px]">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-base font-heading font-bold text-[var(--text-primary)]">
+              Cluster Domains
+            </h3>
+            <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-[var(--bg-tertiary)] text-[var(--text-muted)]">
+              {clusterStats.length} Classes
+            </span>
+          </div>
           <p className="text-xs text-[var(--text-muted)] mb-4">
-            Identified spatial regions and tissue layer annotations
+            {activeVisType === 'ground_truth' ? 'Ground truth anatomical regions' : 'Model-predicted domain clusters'}
           </p>
 
-          <div className="space-y-2.5 flex-1 overflow-y-auto pr-1">
-            {clusterColors.slice(0, activeDatasetObj.clustersCount || 8).map((col, idx) => (
+          <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+            {clusterStats.map(stat => (
               <div
-                key={idx}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-tertiary)]/40 border border-[var(--border-color)] text-xs"
+                key={stat.id}
+                className="flex items-center justify-between p-2.5 rounded-xl bg-[var(--bg-tertiary)]/40 border border-[var(--border-color)] text-xs hover:border-indigo-500/40 transition-colors"
               >
-                <div className="flex items-center gap-2.5">
-                  <span className="w-3.5 h-3.5 rounded-full shadow-sm" style={{ backgroundColor: col }} />
-                  <span className="font-semibold text-[var(--text-primary)]">
-                    Domain {idx + 1}
+                <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                  <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: stat.color }} />
+                  <span className="font-semibold text-[var(--text-primary)] capitalize truncate" title={stat.name}>
+                    {stat.name}
                   </span>
                 </div>
-                <span className="font-mono text-[var(--text-muted)]">
-                  ~{Math.round(activeDatasetObj.spotsCount / (activeDatasetObj.clustersCount || 8))} spots
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-mono text-xs text-[var(--text-primary)] font-bold">
+                    {stat.count.toLocaleString()}
+                  </span>
+                  <span className="font-mono text-[10px] text-[var(--text-muted)]">
+                    ({((stat.count / (spotGrid.length || 1)) * 100).toFixed(1)}%)
+                  </span>
+                </div>
               </div>
             ))}
           </div>

@@ -522,57 +522,47 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
         else:
             ari = None
 
-        if sil > best_sil:
-            best_sil = sil
-            best_epoch = epoch + 1
-            best_ari = ari if ari is not None else 0.0
-            best_embeddings = embeddings.copy()
-            best_labels = pred_labels.copy()
-
         postfix = {'loss': f'{loss.item():.4f}', 'sil': f'{sil:.4f}'}
         if ari is not None:
             postfix['ari'] = f'{ari:.4f}'
-        postfix['best_sil'] = f'{best_sil:.4f} (ep {best_epoch})'
         pbar.set_postfix(postfix)
 
-        if verbose and ((epoch + 1) % 10 == 0 or epoch == 0):
+        if verbose and ((epoch + 1) % 10 == 0 or epoch == 0 or epoch == epochs - 1):
             ari_str = f" | ARI: {ari:.4f}" if ari is not None else ""
-            tqdm.write(f"Epoch {epoch + 1:4d}/{epochs} | Total Loss: {loss.item():.4f} | Recon Loss: {l_rec.item():.4f} | Silhouette: {sil:.4f}{ari_str} | Best Sil: {best_sil:.4f} (Epoch {best_epoch})")
+            tqdm.write(f"Epoch {epoch + 1:4d}/{epochs} | Total Loss: {loss.item():.4f} | Recon Loss: {l_rec.item():.4f} | Silhouette: {sil:.4f}{ari_str}")
 
+    # Use Last Epoch Embeddings and Cluster Assignments
+    final_embeddings = embeddings.copy()
+    final_labels = pred_labels.copy()
     last_sil = epoch_sil_history[-1] if epoch_sil_history else 0.0
     last_ari = epoch_ari_history[-1] if epoch_ari_history else 0.0
 
-    if true_labels is not None and best_labels is not None:
-        final_ari = adjusted_rand_score(true_labels, best_labels)
-        final_nmi = normalized_mutual_info_score(true_labels, best_labels)
+    if true_labels is not None and final_labels is not None:
+        final_ari = adjusted_rand_score(true_labels, final_labels)
+        final_nmi = normalized_mutual_info_score(true_labels, final_labels)
     else:
         final_ari, final_nmi = 0.0, 0.0
 
     if verbose:
         print("\n" + "=" * 65)
-        print(" MODEL TRAINING FINISHED - SUMMARY ".center(65, "="))
+        print(" MODEL TRAINING FINISHED - LAST EPOCH SUMMARY ".center(65, "="))
         print("=" * 65)
-        print(f"Final Epoch Total Loss        : {loss.item():.4f}")
+        print(f"Final Epoch ({epochs}) Total Loss      : {loss.item():.4f}")
         print(f"Last Epoch Silhouette Score   : {last_sil:.4f}")
         if true_labels is not None:
-            print(f"Last Epoch ARI                : {last_ari:.4f}")
-        print("-" * 65)
-        print(f"Best Silhouette Score         : {best_sil:.4f} (Achieved at Epoch {best_epoch})")
-        if true_labels is not None:
-            print(f"ARI at Best Silhouette Epoch  : {final_ari:.4f}")
-            print(f"NMI at Best Silhouette Epoch  : {final_nmi:.4f}")
+            print(f"Last Epoch ARI                : {final_ari:.4f}")
+            print(f"Last Epoch NMI                : {final_nmi:.4f}")
         print("=" * 65 + "\n")
 
     return {
         'model': model,
-        'best_embeddings': best_embeddings,
-        'best_labels': best_labels,
-        'best_sil': best_sil,
-        'best_epoch': best_epoch,
-        'best_ari': final_ari,
-        'best_nmi': final_nmi,
+        'final_embeddings': final_embeddings,
+        'final_labels': final_labels,
+        'final_sil': last_sil,
+        'final_ari': final_ari,
+        'final_nmi': final_nmi,
         'last_sil': last_sil,
-        'last_ari': last_ari,
+        'last_ari': final_ari,
         'loss_history': loss_history,
         'epoch_sil_history': epoch_sil_history,
         'epoch_ari_history': epoch_ari_history
@@ -582,18 +572,6 @@ def train_model(model, data, epochs=350, lr=1e-3, num_clusters=10, true_labels=N
 def plot_training_curves(training_results, dataset_name="Dataset", save_path=None, show=True):
     """
     Plot Loss Curve, Silhouette Score Curve, and ARI Curve across training epochs.
-
-    Parameters:
-    -----------
-    training_results : dict
-        Dictionary returned by train_model containing 'loss_history',
-        'epoch_sil_history', 'epoch_ari_history', 'best_epoch', 'best_sil', and 'best_ari'.
-    dataset_name : str
-        Name of the dataset for plot titles.
-    save_path : str, optional
-        Path to save the generated figure.
-    show : bool
-        Whether to display the plot.
     """
     epochs_range = range(1, len(training_results['loss_history']) + 1)
     has_ari = len(training_results.get('epoch_ari_history', [])) > 0
@@ -612,11 +590,8 @@ def plot_training_curves(training_results, dataset_name="Dataset", save_path=Non
 
     # 2. Silhouette Score Curve
     axes[1].plot(epochs_range, training_results['epoch_sil_history'], color='#2ca02c', linewidth=2.0, label='Silhouette Score')
-    best_ep = training_results.get('best_epoch', 0)
-    best_sil = training_results.get('best_sil', 0.0)
-    if best_ep > 0:
-        axes[1].axvline(x=best_ep, color='#d62728', linestyle='--', linewidth=1.5, label=f'Best Sil @ Ep {best_ep} ({best_sil:.4f})')
-        axes[1].scatter([best_ep], [best_sil], color='#d62728', s=60, zorder=5)
+    last_sil = training_results.get('final_sil', training_results.get('last_sil', 0.0))
+    axes[1].scatter([len(epochs_range)], [last_sil], color='#2ca02c', s=50, zorder=5, label=f'Final Sil: {last_sil:.4f}')
     axes[1].set_title(f'Silhouette Score Curve - {dataset_name}', fontsize=12, fontweight='bold', pad=10)
     axes[1].set_xlabel('Epoch', fontsize=11)
     axes[1].set_ylabel('Silhouette Score', fontsize=11)
@@ -626,10 +601,8 @@ def plot_training_curves(training_results, dataset_name="Dataset", save_path=Non
     # 3. ARI Curve
     if has_ari:
         axes[2].plot(epochs_range, training_results['epoch_ari_history'], color='#ff7f0e', linewidth=2.0, label='Epoch ARI')
-        if best_ep > 0 and len(training_results['epoch_ari_history']) >= best_ep:
-            ari_at_best = training_results['epoch_ari_history'][best_ep - 1]
-            axes[2].axvline(x=best_ep, color='#d62728', linestyle='--', linewidth=1.5, label=f'Best Sil Ep {best_ep} (ARI: {ari_at_best:.4f})')
-            axes[2].scatter([best_ep], [ari_at_best], color='#d62728', s=60, zorder=5)
+        last_ari = training_results.get('final_ari', training_results.get('last_ari', 0.0))
+        axes[2].scatter([len(epochs_range)], [last_ari], color='#ff7f0e', s=50, zorder=5, label=f'Final ARI: {last_ari:.4f}')
         axes[2].set_title(f'ARI Curve - {dataset_name}', fontsize=12, fontweight='bold', pad=10)
         axes[2].set_xlabel('Epoch', fontsize=11)
         axes[2].set_ylabel('Adjusted Rand Index (ARI)', fontsize=11)
@@ -670,19 +643,19 @@ def plot_all_visualizations(
     os.makedirs(os.path.join(plots_dir, "umap"), exist_ok=True)
     os.makedirs(os.path.join(plots_dir, "violin"), exist_ok=True)
 
-    best_embeddings = results['best_embeddings']
-    best_labels = results['best_labels']
-    sil = results['best_sil']
-    ari = results.get('best_ari', 0.0)
+    final_embeddings = results.get('final_embeddings', results.get('best_embeddings'))
+    final_labels = results.get('final_labels', results.get('best_labels'))
+    sil = results.get('final_sil', results.get('last_sil', 0.0))
+    ari = results.get('final_ari', results.get('last_ari', 0.0))
 
     # Ensure adata has necessary annotations
     if true_labels is not None:
         adata_RNA.obs['ground_truth'] = pd.Categorical(true_labels)
     elif 'ground_truth' not in adata_RNA.obs:
-        adata_RNA.obs['ground_truth'] = pd.Categorical(best_labels.astype(str))
+        adata_RNA.obs['ground_truth'] = pd.Categorical(final_labels.astype(str))
 
-    adata_RNA.obsm['Arise_1Layer'] = best_embeddings
-    adata_RNA.obs['predicted_domain'] = pd.Categorical(best_labels.astype(str))
+    adata_RNA.obsm['Arise_1Layer'] = final_embeddings
+    adata_RNA.obs['predicted_domain'] = pd.Categorical(final_labels.astype(str))
 
     # 1. 📈 Plot Loss Curve, Silhouette Score Curve, and ARI Curve
     curve_path = os.path.join(plots_dir, "curves", f"{dataset_name}_seed{seed}_training_curves.png")
@@ -1076,24 +1049,24 @@ def run_experiment(
                 verbose=True
             )
 
-            best_embeddings = result['best_embeddings']
-            best_labels = result['best_labels']
-            best_sil = result['best_sil']
-            best_epoch = result['best_epoch']
+            final_embeddings = result['final_embeddings']
+            final_labels = result['final_labels']
+            last_sil = result['final_sil']
+            last_ari = result['final_ari']
+            last_nmi = result['final_nmi']
 
-            # Compute Final Metrics
-            ari = adjusted_rand_score(true_labels, best_labels)
-            nmi = normalized_mutual_info_score(true_labels, best_labels)
-            ami = adjusted_mutual_info_score(true_labels, best_labels)
-            chi = calinski_harabasz_score(best_embeddings, best_labels)
-            dbi = davies_bouldin_score(best_embeddings, best_labels)
+            # Compute Final Metrics strictly on Last Epoch
+            ari = adjusted_rand_score(true_labels, final_labels) if true_labels is not None else 0.0
+            nmi = normalized_mutual_info_score(true_labels, final_labels) if true_labels is not None else 0.0
+            ami = adjusted_mutual_info_score(true_labels, final_labels) if true_labels is not None else 0.0
+            chi = calinski_harabasz_score(final_embeddings, final_labels)
+            dbi = davies_bouldin_score(final_embeddings, final_labels)
+            homo = homogeneity_score(true_labels, final_labels) if true_labels is not None else 0.0
+            v_meas = v_measure_score(true_labels, final_labels) if true_labels is not None else 0.0
 
-            last_sil = result['last_sil']
-            last_ari = result['last_ari']
-
-            print(f"Summary for {dataset_name} | Seed: {seed}")
-            print(f"• Best Silhouette : {best_sil:.4f} (Epoch {best_epoch}) | ARI @ Best: {ari:.4f} | NMI: {nmi:.4f}")
-            print(f"• Last Silhouette : {last_sil:.4f} (Epoch {epochs})     | Last ARI   : {last_ari:.4f}")
+            print(f"\nSummary for {dataset_name} | Seed: {seed} (Final Epoch {epochs})")
+            print(f" • Silhouette   : {last_sil:.4f} | ARI: {ari:.4f} | NMI: {nmi:.4f} | AMI: {ami:.4f}")
+            print(f" • CHI: {chi:.2f} | DBI: {dbi:.4f} | Homogeneity: {homo:.4f} | V-measure: {v_meas:.4f}")
 
             # Plot and save all visualizations if requested
             if visualize:
@@ -1108,9 +1081,9 @@ def run_experiment(
                     show=show_plots
                 )
 
-            # Compute UMAP coordinates if not already present
+            # Compute UMAP coordinates on final embeddings
             if 'X_umap' not in adata_RNA.obsm:
-                adata_RNA.obsm['Arise_1Layer'] = best_embeddings
+                adata_RNA.obsm['Arise_1Layer'] = final_embeddings
                 sc.pp.neighbors(adata_RNA, use_rep='Arise_1Layer')
                 sc.tl.umap(adata_RNA)
 
@@ -1125,10 +1098,12 @@ def run_experiment(
                 metrics_dict={
                     "ARI": ari,
                     "NMI": nmi,
-                    "Silhouette": best_sil,
+                    "Silhouette": last_sil,
                     "AMI": ami,
                     "CHI": chi,
                     "DBI": dbi,
+                    "Homogeneity": homo,
+                    "V-measure": v_meas,
                 },
                 training_results=result,
                 hyperparameters={
@@ -1142,10 +1117,10 @@ def run_experiment(
                     "rna_pca_comps": rna_pca_comps,
                 },
                 embeddings_data={
-                    "umapCoordinates": (umap_coords[:500].tolist() if umap_coords is not None else None),
-                    "spatialCoordinates": (spatial_coords[:500].tolist() if spatial_coords is not None else None),
-                    "predictedLabels": (best_labels[:500].tolist() if best_labels is not None else None),
-                    "groundTruthLabels": (true_labels[:500].tolist() if true_labels is not None else None),
+                    "umapCoordinates": (umap_coords.tolist() if umap_coords is not None else None),
+                    "spatialCoordinates": (spatial_coords.tolist() if spatial_coords is not None else None),
+                    "predictedLabels": (final_labels.tolist() if final_labels is not None else None),
+                    "groundTruthLabels": (true_labels.tolist() if true_labels is not None else None),
                 },
                 output_dir=output_dir,
                 api_url=api_url
@@ -1154,15 +1129,14 @@ def run_experiment(
             res_dict = {
                 'dataset': dataset_name,
                 'seed': seed,
-                'Best_Silhouette': best_sil,
-                'Best_Sil_Epoch': best_epoch,
-                'Best_ARI': ari,
-                'Best_NMI': nmi,
-                'Last_Silhouette': last_sil,
-                'Last_ARI': last_ari,
+                'Silhouette': last_sil,
+                'ARI': ari,
+                'NMI': nmi,
                 'AMI': ami,
                 'CHI': chi,
                 'DBI': dbi,
+                'Homogeneity': homo,
+                'V-measure': v_meas,
                 'RNA_PCA_Comps': rna_pca_comps,
                 'no_cluster': num_clusters
             }
@@ -1177,13 +1151,13 @@ def run_experiment(
     df_all = pd.DataFrame(all_results)
     df_all.to_csv(os.path.join(output_dir, "Arise4Encoder1Layer_all_results.csv"), index=False)
     
-    summary_cols = ['Best_ARI', 'Best_Silhouette', 'Last_ARI', 'Last_Silhouette', 'Best_NMI']
+    summary_cols = ['ARI', 'Silhouette', 'NMI', 'AMI', 'CHI', 'DBI']
     print("\n" + "=" * 88)
-    print(" ALL EXPERIMENTS COMPLETED - DATASET MEAN SUMMARY ".center(88, "="))
+    print(" ALL EXPERIMENTS COMPLETED - LAST EPOCH DATASET SUMMARY ".center(88, "="))
     print("=" * 88)
     print(df_all.groupby('dataset')[summary_cols].mean().to_string())
     print("-" * 88)
-    print(" OVERALL MEAN ACROSS ALL DATASETS & SEEDS ".center(88, "-"))
+    print(" OVERALL MEAN ACROSS ALL DATASETS & SEEDS (LAST EPOCH) ".center(88, "-"))
     print(df_all[summary_cols].mean().to_frame().T.to_string(index=False))
     print("=" * 88 + "\n")
 
