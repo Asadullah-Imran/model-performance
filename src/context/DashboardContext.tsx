@@ -150,6 +150,15 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   }, [theme]);
 
+  // Keep selectedModelId in sync if empty
+  useEffect(() => {
+    if (aggregatedData.models.length > 0) {
+      if (!selectedModelId || !aggregatedData.models.some(m => m.id === selectedModelId)) {
+        setSelectedModelId(aggregatedData.models[0].id);
+      }
+    }
+  }, [aggregatedData.models, selectedModelId]);
+
   const value = {
     datasets: DATASET_REGISTRY,
     selectedDataset,
@@ -157,7 +166,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     metrics: METRIC_REGISTRY,
     selectedMetric,
     setSelectedMetric,
-    models: MODEL_REGISTRY,
+    models: aggregatedData.models,
     selectedModelId,
     setSelectedModelId,
     resultsByModel: aggregatedData.resultsByModel,

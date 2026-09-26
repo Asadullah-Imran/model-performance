@@ -105,6 +105,7 @@ export function aggregateExperimentRuns(
         finalMetrics: run.finalMetrics || {},
         history: run.history || [],
         visualizations: run.visualizations || {},
+        embeddingsData: run.embeddingsData || {},
       };
 
       metrics.forEach(m => {

@@ -7,7 +7,7 @@ import { useDashboard } from '@/context/DashboardContext';
 type VisType = 'umap' | 'ground_truth' | 'prediction' | 'spatial_map' | 'violin';
 
 export default function VisualizationsPage() {
-  const { models, datasets, selectedDataset } = useDashboard();
+  const { models, datasets, selectedDataset, resultsByModel } = useDashboard();
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   const [selectedSeed, setSelectedSeed] = useState<number>(42);
   const [activeVisType, setActiveVisType] = useState<VisType>('spatial_map');
@@ -18,28 +18,85 @@ export default function VisualizationsPage() {
   const compareModelB = models.find(m => m.id === compareModelBId) || models[1] || models[0];
   const activeDatasetObj = datasets.find(d => d.id === selectedDataset) || datasets[0];
 
-  // Generate interactive SVG spot visualization
+  // Available seeds for the selected model
+  const availableSeeds = useMemo(() => {
+    if (!selectedModel || !resultsByModel[selectedModel.id]) return [42, 2024];
+    const seeds = Object.keys(resultsByModel[selectedModel.id].seeds).map(Number);
+    return seeds.length > 0 ? seeds : [42, 2024];
+  }, [selectedModel, resultsByModel]);
+
+  // Sync selectedSeed if current seed not in availableSeeds
+  React.useEffect(() => {
+    if (availableSeeds.length > 0 && !availableSeeds.includes(selectedSeed)) {
+      setSelectedSeed(availableSeeds[0]);
+    }
+  }, [availableSeeds, selectedSeed]);
+
+  // Generate interactive SVG spot visualization (using real data from embeddingsData if available)
   const spotGrid = useMemo(() => {
-    const spots: Array<{ x: number; y: number; gtCluster: number; predCluster: number }> = [];
+    const activeRun = resultsByModel[selectedModel?.id]?.seeds[selectedSeed] ||
+      (selectedModel ? Object.values(resultsByModel[selectedModel.id]?.seeds || {})[0] : null);
+    const emb = activeRun?.embeddingsData;
+
+    const coords = activeVisType === 'umap' ? emb?.umapCoordinates : emb?.spatialCoordinates;
+    const predLabels = emb?.predictedLabels || [];
+    const gtLabels = emb?.groundTruthLabels || [];
+
+    if (coords && coords.length > 0) {
+      const xs = coords.map(c => c[0]);
+      const ys = coords.map(c => c[1]);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs) || 1;
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys) || 1;
+
+      const gtLabelMap = new Map<string | number, number>();
+      gtLabels.forEach(l => {
+        if (!gtLabelMap.has(l)) {
+          gtLabelMap.set(l, gtLabelMap.size % 16);
+        }
+      });
+
+      return coords.map((c, i) => {
+        const normX = 25 + ((c[0] - minX) / (maxX - minX || 1)) * 270;
+        const normY = 25 + ((c[1] - minY) / (maxY - minY || 1)) * 230;
+        const predCluster = (predLabels[i] ?? (i % 8)) % 16;
+        const gtCluster = gtLabels[i] !== undefined
+          ? (typeof gtLabels[i] === 'number' ? (gtLabels[i] as number) % 16 : gtLabelMap.get(gtLabels[i]) || 0)
+          : predCluster;
+
+        return {
+          x: normX,
+          y: normY,
+          gtCluster,
+          predCluster,
+          rawGt: String(gtLabels[i] || `Cluster ${gtCluster}`),
+          rawPred: `Cluster ${predCluster}`,
+        };
+      });
+    }
+
+    // Synthetic fallback
+    const spots: Array<{ x: number; y: number; gtCluster: number; predCluster: number; rawGt: string; rawPred: string }> = [];
     const count = 180;
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
       const r = 30 + (i % 7) * 8;
       const x = 160 + r * Math.cos(angle) + ((i * 13) % 20);
       const y = 140 + r * Math.sin(angle) + ((i * 17) % 20);
-      
       const gtCluster = (Math.floor(x / 70) + Math.floor(y / 70)) % 8;
       const noise = (i % 11 === 0) ? 1 : 0;
       const predCluster = (gtCluster + noise) % 8;
-
-      spots.push({ x, y, gtCluster, predCluster });
+      spots.push({ x, y, gtCluster, predCluster, rawGt: `Cluster ${gtCluster}`, rawPred: `Cluster ${predCluster}` });
     }
     return spots;
-  }, []);
+  }, [resultsByModel, selectedModel, selectedSeed, activeVisType]);
 
   const clusterColors = [
     '#6366f1', '#10b981', '#f59e0b', '#ec4899',
     '#3b82f6', '#8b5cf6', '#14b8a6', '#f43f5e',
+    '#84cc16', '#06b6d4', '#eab308', '#a855f7',
+    '#22c55e', '#f97316', '#64748b', '#0284c7',
   ];
 
   if (models.length === 0 || !selectedModel) {
@@ -67,7 +124,7 @@ export default function VisualizationsPage() {
             <select
               value={selectedModel?.id || ''}
               onChange={e => setSelectedModelId(e.target.value)}
-              className="bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl px-3 py-1.5 focus:outline-none"
+              className="bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl px-3 py-1.5 focus:outline-none cursor-pointer"
             >
               {models.map(m => (
                 <option key={m.id} value={m.id}>
@@ -83,9 +140,9 @@ export default function VisualizationsPage() {
             <select
               value={selectedSeed}
               onChange={e => setSelectedSeed(Number(e.target.value))}
-              className="bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl px-3 py-1.5 focus:outline-none"
+              className="bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-xl px-3 py-1.5 focus:outline-none cursor-pointer"
             >
-              {[42, 2024, 13, 2560, 641, 1892, 1173].map(s => (
+              {availableSeeds.map(s => (
                 <option key={s} value={s}>
                   Seed {s}
                 </option>

@@ -64,9 +64,15 @@ export interface SeedExperimentData {
   bestEpoch: number;
   bestScore?: number;
   durationSeconds?: number;
-  finalMetrics: Record<string, number>; // { ARI: 0.74, NMI: 0.70, Silhouette: 0.38, AMI: 0.69, Homogeneity: 0.71, "V-measure": 0.70, CHI: 1240.5, DBI: 0.89 }
+  finalMetrics: Record<string, number>;
   history: EpochHistoryPoint[];
   visualizations: SeedVisualizations;
+  embeddingsData?: {
+    umapCoordinates?: number[][];
+    spatialCoordinates?: number[][];
+    predictedLabels?: number[];
+    groundTruthLabels?: (string | number)[];
+  };
 }
 
 export interface DatasetInfo {
