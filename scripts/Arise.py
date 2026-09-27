@@ -27,7 +27,7 @@ import argparse
 import warnings
 import urllib.request
 import urllib.error
-from typing import Optional, Tuple, Dict, List, Union
+from typing import Optional, Tuple, Dict, List, Union, Any
 
 # Suppress non-critical warnings
 warnings.filterwarnings("ignore", category=UserWarning)
