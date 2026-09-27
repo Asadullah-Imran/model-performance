@@ -40,16 +40,8 @@ export default function LoginPage() {
   const handleQuickFill = (role: 'student' | 'faculty' | 'admin') => {
     setActiveTab(role);
     setError('');
-    if (role === 'student') {
-      setUsername('student');
-      setPassword('fdsa4321');
-    } else if (role === 'faculty') {
-      setUsername('faculty');
-      setPassword('asdf1234');
-    } else if (role === 'admin') {
-      setUsername('admin');
-      setPassword('asdf4321');
-    }
+    setUsername(role);
+    setPassword('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -102,7 +94,7 @@ export default function LoginPage() {
         <div className="mb-6">
           <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
             <span>Select Master Role</span>
-            <span className="text-[10px] text-indigo-400 font-normal">1-Click Auto-Fill</span>
+            <span className="text-[10px] text-indigo-400 font-normal">Select Username</span>
           </div>
           <div className="grid grid-cols-3 gap-2">
             <button
