@@ -13,8 +13,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="dark-theme antialiased overflow-hidden flex h-screen w-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+    <html lang="en" className="light">
+      <body className="light-theme antialiased overflow-hidden flex h-screen w-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
         <AppLayout>{children}</AppLayout>
       </body>
     </html>

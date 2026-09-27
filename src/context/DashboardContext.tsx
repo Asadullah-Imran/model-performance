@@ -54,10 +54,22 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [selectedDataset, setSelectedDataset] = useState<string>('all');
   const [selectedMetric, setSelectedMetric] = useState<string>('ARI');
   const [selectedModelId, setSelectedModelId] = useState<string>('');
-  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [dbRuns, setDbRuns] = useState<any[]>([]);
   const [dbModels, setDbModels] = useState<ModelMetadata[]>([]);
+
+  // Load saved theme preference on initial client mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('dashboard_theme') as 'light' | 'dark' | null;
+      if (savedTheme === 'dark' || savedTheme === 'light') {
+        setTheme(savedTheme);
+      } else {
+        setTheme('light');
+      }
+    }
+  }, []);
 
   // Initial weights
   const initialWeights = useMemo(() => {
@@ -125,13 +137,20 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = () => {
     setTheme(prev => {
       const nextTheme = prev === 'dark' ? 'light' : 'dark';
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dashboard_theme', nextTheme);
+      }
       if (typeof document !== 'undefined') {
         if (nextTheme === 'dark') {
           document.documentElement.classList.add('dark');
+          document.documentElement.classList.remove('light');
           document.body.classList.add('dark-theme');
+          document.body.classList.remove('light-theme');
         } else {
           document.documentElement.classList.remove('dark');
+          document.documentElement.classList.add('light');
           document.body.classList.remove('dark-theme');
+          document.body.classList.add('light-theme');
         }
       }
       return nextTheme;
@@ -142,10 +161,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     if (typeof document !== 'undefined') {
       if (theme === 'dark') {
         document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
         document.body.classList.add('dark-theme');
+        document.body.classList.remove('light-theme');
       } else {
         document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
         document.body.classList.remove('dark-theme');
+        document.body.classList.add('light-theme');
       }
     }
   }, [theme]);
