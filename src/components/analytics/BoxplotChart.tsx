@@ -1,185 +1,94 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  Plugin,
-} from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import React, { useState, useMemo } from 'react';
 import { Box } from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
 import { calculateQuartiles } from '@/lib/statistics';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
-
 export function BoxplotChart() {
   const { models, resultsByModel, selectedMetric, theme } = useDashboard();
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
   const isDark = theme === 'dark';
-  const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
   const textColor = isDark ? '#94a3b8' : '#475569';
   const strokeColor = isDark ? '#e2e8f0' : '#1e293b';
 
-  const modelLabels = models.map(m => m.name);
-
-  // Compute stats (min, q1, median, q3, max) for each model
-  const stats = useMemo(() => {
+  // Compute stats for each model
+  const modelStats = useMemo(() => {
     return models.map(model => {
       const values = resultsByModel[model.id]?.aggregatedMetrics?.[selectedMetric]?.values || [];
-      return calculateQuartiles(values);
+      const quartiles = calculateQuartiles(values);
+      return {
+        model,
+        quartiles,
+        count: values.length,
+      };
     });
   }, [models, resultsByModel, selectedMetric]);
 
   // Determine seed count for subtitle
-  const seedCounts = models.map(m => resultsByModel[m.id]?.aggregatedMetrics?.[selectedMetric]?.values?.length || 0);
-  const avgSeedCount = seedCounts.length > 0 && Math.max(...seedCounts) > 0 ? Math.max(...seedCounts) : 20;
+  const maxSeeds = Math.max(...modelStats.map(s => s.count), 0);
+  const seedCountLabel = maxSeeds > 0 ? maxSeeds : 20;
 
-  // Y-axis scaling bounds
-  const validMins = stats.map(s => s.min).filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
-  const validMaxs = stats.map(s => s.max).filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
-  const minVal = validMins.length > 0 ? Math.min(...validMins) : 0;
-  const maxVal = validMaxs.length > 0 ? Math.max(...validMaxs) : 0.4;
-  const range = maxVal - minVal || 0.1;
-  const suggestedMin = Math.max(0, Number((minVal - range * 0.35).toFixed(3)));
-  const suggestedMax = Number((maxVal + range * 0.35).toFixed(3));
+  // Compute Y-scale min, max, and step ticks
+  const { yMin, yMax, ticks } = useMemo(() => {
+    const allMins = modelStats.map(s => s.quartiles.min).filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
+    const allMaxs = modelStats.map(s => s.quartiles.max).filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
 
-  // Custom Chart.js plugin to draw split-tone box-and-whisker plots
-  const boxplotPlugin: Plugin = useMemo(() => ({
-    id: 'customBoxplotPlugin',
-    afterDatasetsDraw(chart: any) {
-      const { ctx, scales: { x: xScale, y: yScale } } = chart;
-      if (!xScale || !yScale) return;
+    let dataMin = allMins.length > 0 ? Math.min(...allMins) : 0.1;
+    let dataMax = allMaxs.length > 0 ? Math.max(...allMaxs) : 0.35;
 
-      const boxWidth = 36;
-      const capWidth = 22;
-      const topColor = '#9b7bf7';   // Pastel Purple (Median -> Q3)
-      const bottomColor = '#5cdbb5'; // Soft Mint Emerald (Q1 -> Median)
+    if (dataMin >= dataMax) {
+      dataMin = 0.1;
+      dataMax = 0.4;
+    }
 
-      stats.forEach((q, i) => {
-        if (!q || isNaN(q.median) || (q.min === 0 && q.max === 0)) return;
+    const span = dataMax - dataMin;
+    // Neat boundaries with padding
+    const rawMin = Math.max(0, dataMin - span * 0.25);
+    const rawMax = dataMax + span * 0.25;
 
-        const x = xScale.getPixelForValue(i);
-        const yMax = yScale.getPixelForValue(q.max);
-        const yQ3 = yScale.getPixelForValue(q.q3);
-        const yMedian = yScale.getPixelForValue(q.median);
-        const yQ1 = yScale.getPixelForValue(q.q1);
-        const yMin = yScale.getPixelForValue(q.min);
+    // Round to nearest 0.05 step
+    const stepSize = span > 0.4 ? 0.1 : 0.05;
+    const computedMin = Math.floor(rawMin / stepSize) * stepSize;
+    const computedMax = Math.ceil(rawMax / stepSize) * stepSize;
 
-        ctx.save();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = strokeColor;
+    const tickList: number[] = [];
+    for (let v = computedMin; v <= computedMax + stepSize * 0.01; v += stepSize) {
+      tickList.push(Number(v.toFixed(3)));
+    }
 
-        // 1. Upper Whisker & Cap (Q3 -> Max)
-        ctx.beginPath();
-        ctx.moveTo(x, yQ3);
-        ctx.lineTo(x, yMax);
-        ctx.moveTo(x - capWidth / 2, yMax);
-        ctx.lineTo(x + capWidth / 2, yMax);
-        ctx.stroke();
+    return {
+      yMin: computedMin,
+      yMax: computedMax,
+      ticks: tickList,
+    };
+  }, [modelStats]);
 
-        // 2. Lower Whisker & Cap (Min -> Q1)
-        ctx.beginPath();
-        ctx.moveTo(x, yQ1);
-        ctx.lineTo(x, yMin);
-        ctx.moveTo(x - capWidth / 2, yMin);
-        ctx.lineTo(x + capWidth / 2, yMin);
-        ctx.stroke();
+  // SVG Dimension Constants
+  const svgWidth = 720;
+  const svgHeight = 360;
+  const marginLeft = 65;
+  const marginRight = 25;
+  const marginTop = 25;
+  const marginBottom = 50;
 
-        // 3. Top Box (Median to Q3)
-        const topHeight = Math.max(Math.abs(yMedian - yQ3), 1);
-        ctx.fillStyle = topColor;
-        ctx.fillRect(x - boxWidth / 2, Math.min(yQ3, yMedian), boxWidth, topHeight);
+  const plotWidth = svgWidth - marginLeft - marginRight;
+  const plotHeight = svgHeight - marginTop - marginBottom;
 
-        // 4. Bottom Box (Q1 to Median)
-        const bottomHeight = Math.max(Math.abs(yQ1 - yMedian), 1);
-        ctx.fillStyle = bottomColor;
-        ctx.fillRect(x - boxWidth / 2, Math.min(yMedian, yQ1), boxWidth, bottomHeight);
-
-        // 5. Box Outline
-        const totalHeight = Math.max(Math.abs(yQ1 - yQ3), 2);
-        ctx.strokeRect(x - boxWidth / 2, Math.min(yQ3, yQ1), boxWidth, totalHeight);
-
-        // 6. Median Dividing Line
-        ctx.beginPath();
-        ctx.moveTo(x - boxWidth / 2, yMedian);
-        ctx.lineTo(x + boxWidth / 2, yMedian);
-        ctx.stroke();
-
-        ctx.restore();
-      });
-    },
-  }), [stats, strokeColor]);
-
-  // Chart dummy data to anchor scales and tooltip triggers
-  const chartData = {
-    labels: modelLabels,
-    datasets: [
-      {
-        label: selectedMetric,
-        data: stats.map(s => s.median),
-        backgroundColor: 'transparent',
-        borderColor: 'transparent',
-        borderWidth: 0,
-        hoverBackgroundColor: 'transparent',
-      },
-    ],
+  const getYPix = (val: number) => {
+    const ratio = (val - yMin) / (yMax - yMin || 1);
+    return marginTop + (1 - ratio) * plotHeight;
   };
 
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          title: (items: any) => models[items[0].dataIndex]?.name || '',
-          label: (item: any) => `Median: ${stats[item.dataIndex]?.median?.toFixed(4)}`,
-          afterBody: (items: any) => {
-            const q = stats[items[0].dataIndex];
-            if (!q) return [];
-            return [
-              `Max: ${q.max.toFixed(4)}`,
-              `Q3 (75%): ${q.q3.toFixed(4)}`,
-              `Median: ${q.median.toFixed(4)}`,
-              `Q1 (25%): ${q.q1.toFixed(4)}`,
-              `Min: ${q.min.toFixed(4)}`,
-              `IQR: ${(q.q3 - q.q1).toFixed(4)}`,
-            ];
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: { display: false },
-        ticks: { color: textColor, font: { family: 'Inter', size: 12, weight: '600' } },
-      },
-      y: {
-        suggestedMin,
-        suggestedMax,
-        title: {
-          display: true,
-          text: selectedMetric,
-          color: textColor,
-          font: { family: 'Inter', size: 12, weight: 'bold' },
-        },
-        grid: { color: gridColor },
-        ticks: {
-          color: textColor,
-          font: { family: 'Inter', size: 11 },
-          callback: (value: any) => Number(value).toFixed(3),
-        },
-      },
-    },
-  };
+  const colWidth = models.length > 0 ? plotWidth / models.length : plotWidth;
+  const boxWidth = Math.min(46, colWidth * 0.52);
+  const capWidth = boxWidth * 0.65;
 
   return (
-    <div className="rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm flex flex-col h-full">
+    <div className="rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm flex flex-col h-full relative">
+      {/* Header */}
       <div className="flex items-start gap-2.5 mb-4">
         <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500 mt-0.5">
           <Box className="w-5 h-5" />
@@ -189,14 +98,228 @@ export function BoxplotChart() {
             Seed Score Distributions
           </h3>
           <p className="text-xs text-[var(--text-muted)]">
-            Spread of {selectedMetric} scores across {avgSeedCount} random seeds
+            Spread of {selectedMetric} scores across {seedCountLabel} random seeds
           </p>
         </div>
       </div>
-      <div className="flex-1 min-h-[300px]">
-        <Bar data={chartData} options={options as any} plugins={[boxplotPlugin]} />
+
+      {/* SVG Boxplot Chart */}
+      <div className="flex-1 w-full min-h-[300px] flex items-center justify-center relative">
+        <svg
+          viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+          className="w-full h-full select-none"
+          preserveAspectRatio="xMidYMid meet"
+        >
+          {/* Horizontal Gridlines & Y-Axis Labels */}
+          {ticks.map((tickVal) => {
+            const yPix = getYPix(tickVal);
+            return (
+              <g key={`tick-${tickVal}`}>
+                <line
+                  x1={marginLeft}
+                  y1={yPix}
+                  x2={marginLeft + plotWidth}
+                  y2={yPix}
+                  stroke={gridColor}
+                  strokeWidth="1"
+                />
+                <text
+                  x={marginLeft - 12}
+                  y={yPix + 4}
+                  textAnchor="end"
+                  fill={textColor}
+                  fontSize="11"
+                  fontFamily="Inter, sans-serif"
+                >
+                  {tickVal.toFixed(3)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Y-Axis Title */}
+          <text
+            transform={`rotate(-90)`}
+            x={-(marginTop + plotHeight / 2)}
+            y={18}
+            textAnchor="middle"
+            fill={textColor}
+            fontSize="12"
+            fontWeight="bold"
+            fontFamily="Inter, sans-serif"
+          >
+            {selectedMetric}
+          </text>
+
+          {/* Model Box Plots */}
+          {modelStats.map((item, idx) => {
+            const { model, quartiles: q } = item;
+            const xCenter = marginLeft + (idx + 0.5) * colWidth;
+
+            const yMaxPix = getYPix(q.max);
+            const yQ3Pix = getYPix(q.q3);
+            const yMedPix = getYPix(q.median);
+            const yQ1Pix = getYPix(q.q1);
+            const yMinPix = getYPix(q.min);
+
+            const isHovered = hoveredIndex === idx;
+
+            // Heights
+            const topBoxHeight = Math.max(1, yMedPix - yQ3Pix);
+            const bottomBoxHeight = Math.max(1, yQ1Pix - yMedPix);
+            const totalBoxHeight = Math.max(2, yQ1Pix - yQ3Pix);
+
+            return (
+              <g
+                key={model.id}
+                className="cursor-pointer transition-opacity duration-200"
+                opacity={hoveredIndex === null || isHovered ? 1 : 0.4}
+                onMouseEnter={() => setHoveredIndex(idx)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                {/* Transparent column hit-area for hover */}
+                <rect
+                  x={xCenter - colWidth / 2}
+                  y={marginTop}
+                  width={colWidth}
+                  height={plotHeight + 35}
+                  fill="transparent"
+                />
+
+                {/* Upper Whisker & Cap */}
+                <line
+                  x1={xCenter}
+                  y1={yQ3Pix}
+                  x2={xCenter}
+                  y2={yMaxPix}
+                  stroke={strokeColor}
+                  strokeWidth={isHovered ? '2' : '1.5'}
+                />
+                <line
+                  x1={xCenter - capWidth / 2}
+                  y1={yMaxPix}
+                  x2={xCenter + capWidth / 2}
+                  y2={yMaxPix}
+                  stroke={strokeColor}
+                  strokeWidth={isHovered ? '2' : '1.5'}
+                />
+
+                {/* Lower Whisker & Cap */}
+                <line
+                  x1={xCenter}
+                  y1={yQ1Pix}
+                  x2={xCenter}
+                  y2={yMinPix}
+                  stroke={strokeColor}
+                  strokeWidth={isHovered ? '2' : '1.5'}
+                />
+                <line
+                  x1={xCenter - capWidth / 2}
+                  y1={yMinPix}
+                  x2={xCenter + capWidth / 2}
+                  y2={yMinPix}
+                  stroke={strokeColor}
+                  strokeWidth={isHovered ? '2' : '1.5'}
+                />
+
+                {/* Top Half of Box: Purple (#9b7bf7) */}
+                <rect
+                  x={xCenter - boxWidth / 2}
+                  y={yQ3Pix}
+                  width={boxWidth}
+                  height={topBoxHeight}
+                  fill="#9b7bf7"
+                />
+
+                {/* Bottom Half of Box: Mint Emerald (#5cdbb5) */}
+                <rect
+                  x={xCenter - boxWidth / 2}
+                  y={yMedPix}
+                  width={boxWidth}
+                  height={bottomBoxHeight}
+                  fill="#5cdbb5"
+                />
+
+                {/* Outer Box Border */}
+                <rect
+                  x={xCenter - boxWidth / 2}
+                  y={yQ3Pix}
+                  width={boxWidth}
+                  height={totalBoxHeight}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth={isHovered ? '2' : '1.5'}
+                />
+
+                {/* Median Dividing Line */}
+                <line
+                  x1={xCenter - boxWidth / 2}
+                  y1={yMedPix}
+                  x2={xCenter + boxWidth / 2}
+                  y2={yMedPix}
+                  stroke={strokeColor}
+                  strokeWidth={isHovered ? '2.5' : '2'}
+                />
+
+                {/* X-Axis Model Name */}
+                <text
+                  x={xCenter}
+                  y={marginTop + plotHeight + 24}
+                  textAnchor="middle"
+                  fill={isHovered ? 'var(--text-primary)' : textColor}
+                  fontSize="12"
+                  fontWeight={isHovered ? '700' : '600'}
+                  fontFamily="Inter, sans-serif"
+                >
+                  {model.name}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Floating Tooltip when hovering over a box */}
+        {hoveredIndex !== null && modelStats[hoveredIndex] && (
+          <div
+            className="absolute z-20 pointer-events-none bg-slate-900/90 dark:bg-slate-800/95 text-white backdrop-blur-md rounded-xl p-3 shadow-xl border border-slate-700/50 text-xs min-w-[170px] transition-all"
+            style={{
+              top: '15px',
+              right: '15px',
+            }}
+          >
+            <div className="font-bold text-sm mb-1.5 flex items-center gap-1.5 border-b border-slate-700/60 pb-1 text-slate-100">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#9b7bf7]"></span>
+              {modelStats[hoveredIndex].model.name}
+            </div>
+            <div className="space-y-1 font-mono text-[11px] text-slate-300">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Max:</span>
+                <span className="font-bold text-white">{modelStats[hoveredIndex].quartiles.max.toFixed(4)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-purple-300">Q3 (75%):</span>
+                <span>{modelStats[hoveredIndex].quartiles.q3.toFixed(4)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-amber-300 font-bold">Median:</span>
+                <span className="font-bold text-amber-300">{modelStats[hoveredIndex].quartiles.median.toFixed(4)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-emerald-300">Q1 (25%):</span>
+                <span>{modelStats[hoveredIndex].quartiles.q1.toFixed(4)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Min:</span>
+                <span className="font-bold text-white">{modelStats[hoveredIndex].quartiles.min.toFixed(4)}</span>
+              </div>
+              <div className="flex justify-between border-t border-slate-700/60 pt-1 text-[10px] text-slate-400">
+                <span>IQR:</span>
+                <span>{(modelStats[hoveredIndex].quartiles.q3 - modelStats[hoveredIndex].quartiles.q1).toFixed(4)}</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
