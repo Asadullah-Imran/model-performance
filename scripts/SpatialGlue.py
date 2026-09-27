@@ -1141,10 +1141,10 @@ def run_experiment(
     dev = get_compute_device(device)
     os.makedirs(output_dir, exist_ok=True)
 
-    if seeds is None:
+    if seeds is None or seeds == "all" or (isinstance(seeds, (list, tuple)) and len(seeds) > 0 and str(seeds[0]).lower() == "all"):
         run_seeds = DEFAULT_SEEDS
     else:
-        run_seeds = list(seeds)
+        run_seeds = [int(s) for s in seeds if isinstance(s, int) or (isinstance(s, str) and s.isdigit())]
 
     if n_seeds is not None and n_seeds > 0:
         run_seeds = run_seeds[:n_seeds]
@@ -1423,8 +1423,8 @@ if __name__ == '__main__':
         help="Datasets to run. Can be index (0 to 5), name (e.g. 10x_human_lymph_node_A1), or 'all'."
     )
     parser.add_argument(
-        '--seeds', nargs='+', type=int, default=None,
-        help="List of random seeds to evaluate (e.g. --seeds 42 0 1 7 123)."
+        '--seeds', nargs='+', default=None,
+        help="List of random seeds to evaluate (e.g. --seeds 42 0 1 7 or --seeds all)."
     )
     parser.add_argument(
         '--n_seeds', type=int, default=None,

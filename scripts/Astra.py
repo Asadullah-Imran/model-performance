@@ -1016,12 +1016,14 @@ def run_experiment(
     dev = get_compute_device(device)
     os.makedirs(output_dir, exist_ok=True)
 
-    if seeds is None:
-        if n_seeds is not None and n_seeds > 0:
-            default_candidates = [42, 2024, 1234, 7, 999, 100, 314, 555]
-            seeds = default_candidates[:n_seeds]
-        else:
-            seeds = [42, 2024]
+    default_candidates = [13, 2560, 641, 1892, 1173, 69, 2024, 231, 1971, 2497, 338, 3127, 2001, 2022, 574, 2428, 999, 1187, 42, 3999]
+    if seeds is None or seeds == "all" or (isinstance(seeds, (list, tuple)) and len(seeds) > 0 and str(seeds[0]).lower() == "all"):
+        seeds = default_candidates
+    else:
+        seeds = [int(s) for s in seeds if isinstance(s, int) or (isinstance(s, str) and s.isdigit())]
+
+    if n_seeds is not None and n_seeds > 0:
+        seeds = seeds[:n_seeds]
 
     if datasets == "all" or (isinstance(datasets, (list, tuple)) and datasets and datasets[0] == "all"):
         dataset_names = [c[0] for c in CHOICES]
@@ -1197,7 +1199,7 @@ def run_experiment(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="ASTRA Multi-Omics Model CLI & Dashboard Integration")
     parser.add_argument('--datasets', nargs='+', default=['10x_human_lymph_node_A1', '10x_human_lymph_node_D1'], help="Datasets to run (e.g. 10x_human_lymph_node_A1 or 'all')")
-    parser.add_argument('--seeds', nargs='+', type=int, default=[42, 2024], help="Random seeds")
+    parser.add_argument('--seeds', nargs='+', default=None, help="Random seeds (e.g. --seeds 42 2024 or --seeds all)")
     parser.add_argument('--n_seeds', type=int, default=None, help="Number of seeds to run")
     parser.add_argument('--pretrain_epochs', type=int, default=250, help="Stage 1 Pre-training Epochs")
     parser.add_argument('--finetune_epochs', type=int, default=150, help="Stage 2 DEC Fine-tuning Epochs")
