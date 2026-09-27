@@ -7,12 +7,22 @@ This directory houses the standalone deep-learning model training pipelines for 
 scripts/
 ├── AriseSpatialGlue_4Encoder_1Layer.py   # 4-Encoder 1-Layer GCN with RNA PCA
 ├── Astra.py                             # ASTRA: Spot-Adaptive Gated GCN + Spatial Potts DEC
+├── SpatialGlue.py                       # SpatialGlue: Dual-Attention Spatial Multi-Omics GNN
 └── README.md
 ```
 
 ## 🚀 Running Scripts
 
-### 1. Running ARISE (4-Encoder 1-Layer):
+### 1. Running SpatialGlue:
+```bash
+python scripts/SpatialGlue.py \
+  --datasets 0 1 \
+  --seeds 42 2024 \
+  --tool mclust \
+  --api_url https://model-performance.vercel.app/api/experiments/upload
+```
+
+### 2. Running ARISE (4-Encoder 1-Layer):
 ```bash
 python scripts/AriseSpatialGlue_4Encoder_1Layer.py \
   --datasets 0 1 \
@@ -21,7 +31,7 @@ python scripts/AriseSpatialGlue_4Encoder_1Layer.py \
   --api_url https://model-performance.vercel.app/api/experiments/upload
 ```
 
-### 2. Running ASTRA (Gated GCN + Potts DEC):
+### 3. Running ASTRA (Gated GCN + Potts DEC):
 ```bash
 python scripts/Astra.py \
   --datasets 0 1 \
