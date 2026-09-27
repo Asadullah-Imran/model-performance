@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Database, Moon, Sun, Cpu, UploadCloud, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Database, Moon, Sun, Cpu, UploadCloud, RefreshCw, CheckCircle2, LogOut, User as UserIcon, Shield, GraduationCap, BookOpen } from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
+import { useAuth } from '@/context/AuthContext';
 import { UploadExperimentModal } from '@/components/upload/UploadExperimentModal';
 
 const ROUTE_TITLES: Record<string, { title: string; subtitle: string }> = {
@@ -58,12 +59,35 @@ export function Header() {
     totalRunsCount,
     refreshData,
   } = useDashboard();
+  const { user, logout } = useAuth();
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
 
   const currentMeta = ROUTE_TITLES[pathname] || {
     title: 'Spatial Multi-Omics Dashboard',
     subtitle: 'Benchmark analytics platform for deep learning models',
   };
+
+  const roleBadgeConfig = {
+    admin: {
+      color: 'bg-pink-500/15 text-pink-600 dark:text-pink-400 border-pink-500/30',
+      icon: Shield,
+      label: 'Admin',
+    },
+    faculty: {
+      color: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+      icon: GraduationCap,
+      label: 'Faculty',
+    },
+    student: {
+      color: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
+      icon: BookOpen,
+      label: 'Student',
+    },
+  };
+
+  const currentRole = user?.role || 'student';
+  const roleMeta = roleBadgeConfig[currentRole] || roleBadgeConfig.student;
+  const RoleIcon = roleMeta.icon;
 
   return (
     <header className="relative h-20 bg-[var(--bg-secondary)]/80 backdrop-blur-md border-b border-[var(--border-color)] px-8 flex items-center justify-between z-10 flex-shrink-0">
@@ -131,7 +155,7 @@ export function Header() {
         </button>
 
         {/* Model Count Badge */}
-        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-xs font-semibold">
+        <div className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-xs font-semibold">
           <Cpu className="w-3.5 h-3.5" />
           <span>{models.length} Models</span>
         </div>
@@ -139,20 +163,48 @@ export function Header() {
         {/* Upload / Ingest JSON to MongoDB Button */}
         <button
           onClick={() => setIsUploadOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-600/15 dark:hover:bg-indigo-600/25 dark:text-indigo-400 dark:border-indigo-500/30 text-xs font-semibold transition-all shadow-sm"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-600/15 dark:hover:bg-indigo-600/25 dark:text-indigo-400 dark:border-indigo-500/30 text-xs font-semibold transition-all shadow-sm cursor-pointer"
         >
           <UploadCloud className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span className="hidden sm:inline">Import to DB</span>
+          <span className="hidden sm:inline">Import</span>
         </button>
 
         {/* Theme Toggle Button */}
         <button
           onClick={toggleTheme}
           aria-label="Toggle Theme"
-          className="p-2.5 rounded-xl bg-[var(--bg-tertiary)]/70 border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-indigo-500/40 transition-all shadow-sm"
+          className="p-2.5 rounded-xl bg-[var(--bg-tertiary)]/70 border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-indigo-500/40 transition-all shadow-sm cursor-pointer"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
         </button>
+
+        {/* User Account / Role Badge & Logout */}
+        {user && (
+          <div className="flex items-center gap-2 pl-2 border-l border-[var(--border-color)]">
+            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-[var(--bg-tertiary)]/70 border border-[var(--border-color)] shadow-sm">
+              <div className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-500 flex items-center justify-center font-bold text-xs">
+                {user.username.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex flex-col text-left">
+                <span className="text-xs font-semibold text-[var(--text-primary)] leading-tight capitalize">
+                  {user.username}
+                </span>
+                <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border inline-flex items-center gap-0.5 w-fit ${roleMeta.color}`}>
+                  <RoleIcon className="w-2.5 h-2.5" />
+                  {roleMeta.label}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => logout()}
+              title="Sign Out"
+              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 dark:text-rose-400 dark:border-rose-500/20 transition-all shadow-sm cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       <UploadExperimentModal
