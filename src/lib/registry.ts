@@ -169,7 +169,7 @@ export const DATASET_REGISTRY: DatasetInfo[] = [
   },
 ];
 
-// Signature color themes for known models
+// Signature color themes for known models (matching lighter modern pastel-punch palette)
 export const KNOWN_MODEL_PALETTES: Record<string, {
   baseColor: string;
   glowColor: string;
@@ -179,80 +179,80 @@ export const KNOWN_MODEL_PALETTES: Record<string, {
   textClass: string;
 }> = {
   smart: {
-    baseColor: 'hsl(262, 85%, 60%)', // Vibrant Purple
-    glowColor: 'hsla(262, 85%, 60%, 0.2)',
-    bgSoft: 'hsla(262, 85%, 60%, 0.08)',
+    baseColor: '#936bf5', // Soft Vibrant Purple (Bar 1)
+    glowColor: 'rgba(147, 107, 245, 0.2)',
+    bgSoft: 'rgba(147, 107, 245, 0.08)',
     borderClass: 'border-purple-500/40',
     badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
     textClass: 'text-purple-600 dark:text-purple-400',
   },
-  spatialglue: {
-    baseColor: 'hsl(38, 95%, 52%)', // Warm Amber/Gold
-    glowColor: 'hsla(38, 95%, 52%, 0.2)',
-    bgSoft: 'hsla(38, 95%, 52%, 0.08)',
-    borderClass: 'border-amber-500/40',
-    badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-    textClass: 'text-amber-600 dark:text-amber-400',
-  },
-  arise: {
-    baseColor: 'hsl(343, 90%, 60%)', // Rose/Crimson
-    glowColor: 'hsla(343, 90%, 60%, 0.2)',
-    bgSoft: 'hsla(343, 90%, 60%, 0.08)',
-    borderClass: 'border-rose-500/40',
-    badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-    textClass: 'text-rose-600 dark:text-rose-400',
-  },
-  arisespatialglue: {
-    baseColor: 'hsl(315, 85%, 55%)', // Magenta/Fuchsia
-    glowColor: 'hsla(315, 85%, 55%, 0.2)',
-    bgSoft: 'hsla(315, 85%, 55%, 0.08)',
-    borderClass: 'border-pink-500/40',
-    badgeClass: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20',
-    textClass: 'text-pink-600 dark:text-pink-400',
-  },
-  astra: {
-    baseColor: 'hsl(195, 90%, 48%)', // Electric Cyan/Sky
-    glowColor: 'hsla(195, 90%, 48%, 0.2)',
-    bgSoft: 'hsla(195, 90%, 48%, 0.08)',
-    borderClass: 'border-cyan-500/40',
-    badgeClass: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
-    textClass: 'text-cyan-600 dark:text-cyan-400',
-  },
   cage: {
-    baseColor: 'hsl(160, 84%, 40%)', // Emerald/Teal
-    glowColor: 'hsla(160, 84%, 40%, 0.2)',
-    bgSoft: 'hsla(160, 84%, 40%, 0.08)',
+    baseColor: '#38c28f', // Soft Minty Green (Bar 2)
+    glowColor: 'rgba(56, 194, 143, 0.2)',
+    bgSoft: 'rgba(56, 194, 143, 0.08)',
     borderClass: 'border-emerald-500/40',
     badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
     textClass: 'text-emerald-600 dark:text-emerald-400',
   },
+  astra: {
+    baseColor: '#f45b69', // Soft Coral/Salmon Red (Bar 3)
+    glowColor: 'rgba(244, 91, 105, 0.2)',
+    bgSoft: 'rgba(244, 91, 105, 0.08)',
+    borderClass: 'border-rose-500/40',
+    badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+    textClass: 'text-rose-600 dark:text-rose-400',
+  },
+  arise: {
+    baseColor: '#fa4d9f', // Bright Neon Pink/Rose (Bar 4)
+    glowColor: 'rgba(250, 77, 159, 0.2)',
+    bgSoft: 'rgba(250, 77, 159, 0.08)',
+    borderClass: 'border-pink-500/40',
+    badgeClass: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20',
+    textClass: 'text-pink-600 dark:text-pink-400',
+  },
+  arisespatialglue: {
+    baseColor: '#ff6584', // Watermelon Rose
+    glowColor: 'rgba(255, 101, 132, 0.2)',
+    bgSoft: 'rgba(255, 101, 132, 0.08)',
+    borderClass: 'border-rose-500/40',
+    badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+    textClass: 'text-rose-600 dark:text-rose-400',
+  },
+  spatialglue: {
+    baseColor: '#f5a638', // Warm Amber/Golden Orange (Bar 5)
+    glowColor: 'rgba(245, 166, 56, 0.2)',
+    bgSoft: 'rgba(245, 166, 56, 0.08)',
+    borderClass: 'border-amber-500/40',
+    badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    textClass: 'text-amber-600 dark:text-amber-400',
+  },
   sedr: {
-    baseColor: 'hsl(280, 85%, 62%)', // Indigo/Violet
-    glowColor: 'hsla(280, 85%, 62%, 0.2)',
-    bgSoft: 'hsla(280, 85%, 62%, 0.08)',
+    baseColor: '#a78bfa', // Lavender Violet
+    glowColor: 'rgba(167, 139, 250, 0.2)',
+    bgSoft: 'rgba(167, 139, 250, 0.08)',
     borderClass: 'border-violet-500/40',
     badgeClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
     textClass: 'text-violet-600 dark:text-violet-400',
   },
   stagate: {
-    baseColor: 'hsl(215, 90%, 55%)', // Royal Blue
-    glowColor: 'hsla(215, 90%, 55%, 0.2)',
-    bgSoft: 'hsla(215, 90%, 55%, 0.08)',
-    borderClass: 'border-blue-500/40',
-    badgeClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-    textClass: 'text-blue-600 dark:text-blue-400',
+    baseColor: '#38bdf8', // Sky Blue
+    glowColor: 'rgba(56, 189, 248, 0.2)',
+    bgSoft: 'rgba(56, 189, 248, 0.08)',
+    borderClass: 'border-sky-500/40',
+    badgeClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+    textClass: 'text-sky-600 dark:text-sky-400',
   },
 };
 
 // Generates dynamic theme tokens for any new or custom model
-const PALETTE_HUES = [262, 38, 343, 195, 160, 315, 280, 215, 140, 25];
+const PALETTE_HEXES = ['#936bf5', '#38c28f', '#f45b69', '#fa4d9f', '#f5a638', '#38bdf8', '#a78bfa', '#ff6584'];
 
 export function generateModelColorTheme(indexOrSeed: number) {
-  const hue = PALETTE_HUES[Math.abs(indexOrSeed) % PALETTE_HUES.length];
+  const hex = PALETTE_HEXES[Math.abs(indexOrSeed) % PALETTE_HEXES.length];
   return {
-    baseColor: `hsl(${hue}, 85%, 55%)`,
-    glowColor: `hsla(${hue}, 85%, 55%, 0.2)`,
-    bgSoft: `hsla(${hue}, 85%, 55%, 0.08)`,
+    baseColor: hex,
+    glowColor: `${hex}33`,
+    bgSoft: `${hex}14`,
     borderClass: `border-indigo-500/40`,
     badgeClass: `bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20`,
     textClass: `text-indigo-600 dark:text-indigo-400`,
