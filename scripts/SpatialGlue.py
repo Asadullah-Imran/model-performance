@@ -21,9 +21,19 @@ import json
 import time
 import random
 import argparse
+import warnings
 import urllib.request
 import urllib.error
 from typing import Optional, Tuple, Dict, List, Union
+
+# Suppress non-critical user and future warnings for clean terminal logs
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+# Setup R environment paths if available
+if 'R_HOME' not in os.environ and os.path.exists('/usr/lib/R'):
+    os.environ['R_HOME'] = '/usr/lib/R'
+    os.environ['PATH'] = '/usr/lib/R/bin:' + os.environ.get('PATH', '')
 
 import numpy as np
 import pandas as pd
@@ -672,9 +682,20 @@ def mclust_R(adata, num_cluster, modelNames='EEE', used_obsm='emb_pca', random_s
         import rpy2.robjects as robjects
         from rpy2.robjects import pandas2ri, default_converter
         from rpy2.robjects.conversion import localconverter
+        import rpy2.robjects.conversion as cv
+
+        cv.set_conversion(default_converter + pandas2ri.converter)
+        robjects.r.options(warn=-1)
+
+        # Attempt to install mclust if missing in R environment
+        robjects.r("""
+        if (!requireNamespace("mclust", quietly = TRUE)) {
+            install.packages("mclust", repos="https://cloud.r-project.org", quiet=TRUE)
+        }
+        library(mclust)
+        """)
 
         np.random.seed(random_seed)
-        robjects.r.library("mclust")
         r_random_seed = robjects.r["set.seed"]
         r_random_seed(random_seed)
         rmclust = robjects.r["Mclust"]
@@ -887,10 +908,28 @@ def plot_all_visualizations(
         adata_RNA.obs['silhouette_coefficient'] = sample_sil_values
         adata_RNA.obs['Latent_Dim_1'] = final_embeddings[:, 0]
         fig, axes = plt.subplots(1, 2, figsize=(16, 5.5))
-        sns.violinplot(data=adata_RNA.obs, x='predicted_domain', y='silhouette_coefficient', palette='Set2', inner='quartile', ax=axes[0])
+        sns.violinplot(
+            data=adata_RNA.obs,
+            x='predicted_domain',
+            y='silhouette_coefficient',
+            hue='predicted_domain',
+            palette='Set2',
+            legend=False,
+            inner='quartile',
+            ax=axes[0]
+        )
         axes[0].axhline(sil, color='red', linestyle='--', label=f'Mean Sil: {sil:.4f}')
         axes[0].set_title("Silhouette Coefficient per Predicted Domain", fontsize=12, fontweight='bold')
-        sns.violinplot(data=adata_RNA.obs, x='predicted_domain', y='Latent_Dim_1', palette='tab10', inner='box', ax=axes[1])
+        sns.violinplot(
+            data=adata_RNA.obs,
+            x='predicted_domain',
+            y='Latent_Dim_1',
+            hue='predicted_domain',
+            palette='tab10',
+            legend=False,
+            inner='box',
+            ax=axes[1]
+        )
         axes[1].set_title("Latent Dimension 1 Distribution per Domain", fontsize=12, fontweight='bold')
         plt.suptitle(f"Violin Plots: Cluster Profiles - {dataset_name} (Seed {seed})", fontsize=14, fontweight='bold', y=1.02)
         plt.tight_layout()
