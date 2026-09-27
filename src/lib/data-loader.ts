@@ -10,6 +10,7 @@ import {
   DATASET_REGISTRY,
   METRIC_REGISTRY,
   generateModelColorTheme,
+  resolveModelColorTheme,
 } from './registry';
 import {
   calculateMean,
@@ -36,12 +37,14 @@ export function aggregateExperimentRuns(
   const datasets = DATASET_REGISTRY;
   const metrics = METRIC_REGISTRY;
 
-  // Build model map from provided list
+  // Build model map from provided list with distinct signature color themes
   const modelMap: Record<string, ModelMetadata> = {};
   modelsList.forEach((m, idx) => {
+    // Check if the color is missing or the generic default blue
+    const isGenericDefault = !m.colorTheme || m.colorTheme.baseColor === 'hsl(215, 90%, 55%)';
     modelMap[m.id] = {
       ...m,
-      colorTheme: m.colorTheme || generateModelColorTheme(idx),
+      colorTheme: isGenericDefault ? resolveModelColorTheme(m.id, m.name, idx) : m.colorTheme,
     };
   });
 
@@ -71,7 +74,7 @@ export function aggregateExperimentRuns(
         description: 'Auto-registered model from experiment pipeline',
         architecture: 'Deep Learning Model',
         hyperparameters: {},
-        colorTheme: generateModelColorTheme(Object.keys(modelMap).length),
+        colorTheme: resolveModelColorTheme(modelId, run.modelName || modelId, Object.keys(modelMap).length),
       };
     }
 

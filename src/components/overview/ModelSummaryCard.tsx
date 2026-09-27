@@ -90,7 +90,7 @@ export function ModelSummaryCard({ model, results, rank }: Props) {
       {/* Card Footer: Stability & Seed Variance */}
       <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)] mt-1">
         <span className="flex items-center gap-1.5 font-medium">
-          <Activity className="w-3.5 h-3.5 text-emerald-400" />
+          <Activity className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
           Stability (CV%):
         </span>
         <span className="font-mono font-semibold text-[var(--text-secondary)]">

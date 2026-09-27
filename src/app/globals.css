@@ -9,53 +9,53 @@
   --bg-primary: #f8fafc;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f1f5f9;
-  --bg-glass: rgba(255, 255, 255, 0.85);
-  --border-color: rgba(15, 23, 42, 0.08);
-  --border-glow: rgba(15, 23, 42, 0.12);
+  --bg-glass: rgba(255, 255, 255, 0.92);
+  --border-color: rgba(15, 23, 42, 0.12);
+  --border-glow: rgba(79, 70, 229, 0.25);
   
   --text-primary: #0f172a;
-  --text-secondary: #475569;
+  --text-secondary: #334155;
   --text-muted: #64748b;
   
   /* Model Palette (Vibrant Accents) */
   --smart-base: 262;
-  --smart-color: hsl(var(--smart-base), 75%, 55%);
-  --smart-glow: hsla(var(--smart-base), 75%, 55%, 0.15);
-  --smart-bg-soft: hsla(var(--smart-base), 75%, 55%, 0.08);
+  --smart-color: hsl(var(--smart-base), 85%, 60%);
+  --smart-glow: hsla(var(--smart-base), 85%, 60%, 0.18);
+  --smart-bg-soft: hsla(var(--smart-base), 85%, 60%, 0.08);
 
   --cage-base: 160;
-  --cage-color: hsl(var(--cage-base), 84%, 38%);
-  --cage-glow: hsla(var(--cage-base), 84%, 38%, 0.15);
-  --cage-bg-soft: hsla(var(--cage-base), 84%, 38%, 0.08);
+  --cage-color: hsl(var(--cage-base), 84%, 40%);
+  --cage-glow: hsla(var(--cage-base), 84%, 40%, 0.18);
+  --cage-bg-soft: hsla(var(--cage-base), 84%, 40%, 0.08);
 
   --arise-base: 343;
-  --arise-color: hsl(var(--arise-base), 85%, 50%);
-  --arise-glow: hsla(var(--arise-base), 85%, 50%, 0.15);
-  --arise-bg-soft: hsla(var(--arise-base), 85%, 50%, 0.08);
+  --arise-color: hsl(var(--arise-base), 90%, 55%);
+  --arise-glow: hsla(var(--arise-base), 90%, 55%, 0.18);
+  --arise-bg-soft: hsla(var(--arise-base), 90%, 55%, 0.08);
 
   --arisesill-base: 315;
-  --arisesill-color: hsl(var(--arisesill-base), 85%, 50%);
-  --arisesill-glow: hsla(var(--arisesill-base), 85%, 50%, 0.15);
-  --arisesill-bg-soft: hsla(var(--arisesill-base), 85%, 50%, 0.08);
+  --arisesill-color: hsl(var(--arisesill-base), 85%, 55%);
+  --arisesill-glow: hsla(var(--arisesill-base), 85%, 55%, 0.18);
+  --arisesill-bg-soft: hsla(var(--arisesill-base), 85%, 55%, 0.08);
 
   --spatialglue-base: 38;
-  --spatialglue-color: hsl(var(--spatialglue-base), 92%, 46%);
-  --spatialglue-glow: hsla(var(--spatialglue-base), 92%, 46%, 0.15);
-  --spatialglue-bg-soft: hsla(var(--spatialglue-base), 92%, 46%, 0.08);
+  --spatialglue-color: hsl(var(--spatialglue-base), 95%, 48%);
+  --spatialglue-glow: hsla(var(--spatialglue-base), 95%, 48%, 0.18);
+  --spatialglue-bg-soft: hsla(var(--spatialglue-base), 95%, 48%, 0.08);
 
   --nopcasmart-base: 195;
-  --nopcasmart-color: hsl(var(--nopcasmart-base), 85%, 45%);
-  --nopcasmart-glow: hsla(var(--nopcasmart-base), 85%, 45%, 0.15);
-  --nopcasmart-bg-soft: hsla(var(--nopcasmart-base), 85%, 45%, 0.08);
+  --nopcasmart-color: hsl(var(--nopcasmart-base), 90%, 46%);
+  --nopcasmart-glow: hsla(var(--nopcasmart-base), 90%, 46%, 0.18);
+  --nopcasmart-bg-soft: hsla(var(--nopcasmart-base), 90%, 46%, 0.08);
 
   /* UI Colors */
   --accent: #4f46e5;
-  --accent-glow: rgba(79, 70, 229, 0.15);
+  --accent-glow: rgba(79, 70, 229, 0.18);
   --success: #059669;
   --warning: #d97706;
   --danger: #dc2626;
   
-  --shadow-premium: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+  --shadow-premium: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
 }
 
 .dark, body.dark-theme, html.dark {

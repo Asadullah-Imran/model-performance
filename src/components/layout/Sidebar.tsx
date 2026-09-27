@@ -39,17 +39,17 @@ export function Sidebar() {
       {/* Sidebar Header */}
       <div className="p-5 flex items-center justify-between border-b border-[var(--border-color)]">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-lg shadow-indigo-500/10">
+          <div className="w-9 h-9 rounded-xl bg-indigo-600/10 dark:bg-indigo-600/20 border border-indigo-500/20 dark:border-indigo-500/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-md shadow-indigo-500/5">
             <Activity className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="font-heading font-bold text-lg leading-none bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
+            <h2 className="font-heading font-bold text-lg leading-none bg-gradient-to-r from-indigo-700 via-indigo-600 to-purple-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
               SpatialAnalyzer
             </h2>
             <span className="text-[11px] text-[var(--text-muted)] font-medium">Multi-Omics Research</span>
           </div>
         </div>
-        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+        <span className="px-2 py-0.5 text-[10px] font-bold rounded-full uppercase bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
           v2.0
         </span>
       </div>
@@ -68,11 +68,11 @@ export function Sidebar() {
               href={item.href}
               className={`flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 ${
                 isActive
-                  ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 shadow-sm'
+                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 shadow-sm dark:bg-indigo-500/15 dark:text-indigo-400 dark:border-indigo-500/30'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
               }`}
             >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-[var(--text-muted)]'}`} />
+              <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-[var(--text-muted)]'}`} />
               <span>{item.label}</span>
             </Link>
           );

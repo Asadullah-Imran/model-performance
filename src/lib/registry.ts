@@ -169,8 +169,83 @@ export const DATASET_REGISTRY: DatasetInfo[] = [
   },
 ];
 
-// Generates dynamic theme tokens for any new model added on the fly
-const PALETTE_HUES = [215, 262, 160, 343, 38, 315, 195, 280, 140, 25];
+// Signature color themes for known models
+export const KNOWN_MODEL_PALETTES: Record<string, {
+  baseColor: string;
+  glowColor: string;
+  bgSoft: string;
+  borderClass: string;
+  badgeClass: string;
+  textClass: string;
+}> = {
+  smart: {
+    baseColor: 'hsl(262, 85%, 60%)', // Vibrant Purple
+    glowColor: 'hsla(262, 85%, 60%, 0.2)',
+    bgSoft: 'hsla(262, 85%, 60%, 0.08)',
+    borderClass: 'border-purple-500/40',
+    badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+    textClass: 'text-purple-600 dark:text-purple-400',
+  },
+  spatialglue: {
+    baseColor: 'hsl(38, 95%, 52%)', // Warm Amber/Gold
+    glowColor: 'hsla(38, 95%, 52%, 0.2)',
+    bgSoft: 'hsla(38, 95%, 52%, 0.08)',
+    borderClass: 'border-amber-500/40',
+    badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    textClass: 'text-amber-600 dark:text-amber-400',
+  },
+  arise: {
+    baseColor: 'hsl(343, 90%, 60%)', // Rose/Crimson
+    glowColor: 'hsla(343, 90%, 60%, 0.2)',
+    bgSoft: 'hsla(343, 90%, 60%, 0.08)',
+    borderClass: 'border-rose-500/40',
+    badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
+    textClass: 'text-rose-600 dark:text-rose-400',
+  },
+  arisespatialglue: {
+    baseColor: 'hsl(315, 85%, 55%)', // Magenta/Fuchsia
+    glowColor: 'hsla(315, 85%, 55%, 0.2)',
+    bgSoft: 'hsla(315, 85%, 55%, 0.08)',
+    borderClass: 'border-pink-500/40',
+    badgeClass: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20',
+    textClass: 'text-pink-600 dark:text-pink-400',
+  },
+  astra: {
+    baseColor: 'hsl(195, 90%, 48%)', // Electric Cyan/Sky
+    glowColor: 'hsla(195, 90%, 48%, 0.2)',
+    bgSoft: 'hsla(195, 90%, 48%, 0.08)',
+    borderClass: 'border-cyan-500/40',
+    badgeClass: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
+    textClass: 'text-cyan-600 dark:text-cyan-400',
+  },
+  cage: {
+    baseColor: 'hsl(160, 84%, 40%)', // Emerald/Teal
+    glowColor: 'hsla(160, 84%, 40%, 0.2)',
+    bgSoft: 'hsla(160, 84%, 40%, 0.08)',
+    borderClass: 'border-emerald-500/40',
+    badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    textClass: 'text-emerald-600 dark:text-emerald-400',
+  },
+  sedr: {
+    baseColor: 'hsl(280, 85%, 62%)', // Indigo/Violet
+    glowColor: 'hsla(280, 85%, 62%, 0.2)',
+    bgSoft: 'hsla(280, 85%, 62%, 0.08)',
+    borderClass: 'border-violet-500/40',
+    badgeClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+    textClass: 'text-violet-600 dark:text-violet-400',
+  },
+  stagate: {
+    baseColor: 'hsl(215, 90%, 55%)', // Royal Blue
+    glowColor: 'hsla(215, 90%, 55%, 0.2)',
+    bgSoft: 'hsla(215, 90%, 55%, 0.08)',
+    borderClass: 'border-blue-500/40',
+    badgeClass: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+    textClass: 'text-blue-600 dark:text-blue-400',
+  },
+};
+
+// Generates dynamic theme tokens for any new or custom model
+const PALETTE_HUES = [262, 38, 343, 195, 160, 315, 280, 215, 140, 25];
 
 export function generateModelColorTheme(indexOrSeed: number) {
   const hue = PALETTE_HUES[Math.abs(indexOrSeed) % PALETTE_HUES.length];
@@ -179,10 +254,51 @@ export function generateModelColorTheme(indexOrSeed: number) {
     glowColor: `hsla(${hue}, 85%, 55%, 0.2)`,
     bgSoft: `hsla(${hue}, 85%, 55%, 0.08)`,
     borderClass: `border-indigo-500/40`,
-    badgeClass: `bg-indigo-500/10 text-indigo-400 border-indigo-500/20`,
-    textClass: `text-indigo-400`,
+    badgeClass: `bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20`,
+    textClass: `text-indigo-600 dark:text-indigo-400`,
   };
+}
+
+/**
+ * Resolves a model's distinct color theme:
+ * 1. Matches against known canonical models (SMART, SpatialGlue, ARISE, Astra, CAGE, etc.)
+ * 2. If existing theme is just the default blue fallback, replaces with canonical distinct color
+ * 3. Otherwise generates a distinct deterministic color by index/hash
+ */
+export function resolveModelColorTheme(modelId: string, modelName: string = '', index: number = 0) {
+  const cleanId = (modelId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanName = (modelName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // Check known palettes
+  if (cleanId.includes('arisespatialglue') || cleanId.includes('4encoder') || cleanName.includes('4encoder')) {
+    return KNOWN_MODEL_PALETTES.arisespatialglue;
+  }
+  if (cleanId.startsWith('arise') || cleanName.startsWith('arise')) {
+    return KNOWN_MODEL_PALETTES.arise;
+  }
+  if (cleanId.includes('smart') || cleanName.includes('smart')) {
+    return KNOWN_MODEL_PALETTES.smart;
+  }
+  if (cleanId.includes('spatialglue') || cleanName.includes('spatialglue')) {
+    return KNOWN_MODEL_PALETTES.spatialglue;
+  }
+  if (cleanId.includes('astra') || cleanName.includes('astra')) {
+    return KNOWN_MODEL_PALETTES.astra;
+  }
+  if (cleanId.includes('cage') || cleanName.includes('cage')) {
+    return KNOWN_MODEL_PALETTES.cage;
+  }
+  if (cleanId.includes('sedr') || cleanName.includes('sedr')) {
+    return KNOWN_MODEL_PALETTES.sedr;
+  }
+  if (cleanId.includes('stagate') || cleanName.includes('stagate')) {
+    return KNOWN_MODEL_PALETTES.stagate;
+  }
+
+  // Fallback to distinct hue by index
+  return generateModelColorTheme(index);
 }
 
 // Initial empty registry: Models are created dynamically as experiments are submitted
 export const MODEL_REGISTRY: ModelMetadata[] = [];
+

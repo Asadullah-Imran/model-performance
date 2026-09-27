@@ -84,7 +84,7 @@ export function Header() {
       <div className="flex items-center gap-3">
         {/* Dataset Selector */}
         <div className="flex items-center gap-2 bg-[var(--bg-tertiary)]/70 border border-[var(--border-color)] px-3 py-1.5 rounded-xl text-xs font-medium text-[var(--text-secondary)] shadow-sm">
-          <Database className="w-3.5 h-3.5 text-indigo-400" />
+          <Database className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           <label htmlFor="dataset-select" className="text-[var(--text-muted)] font-semibold">
             Dataset:
           </label>
@@ -112,26 +112,26 @@ export function Header() {
           title="Click to refresh latest runs from MongoDB"
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all shadow-sm ${
             isLoading
-              ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 cursor-wait'
-              : 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/25 text-emerald-400 cursor-pointer'
+              ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-500/10 dark:border-indigo-500/30 dark:text-indigo-400 cursor-wait'
+              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:border-emerald-500/25 dark:text-emerald-400 cursor-pointer'
           }`}
         >
           {isLoading ? (
             <>
-              <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600 dark:text-indigo-400" />
               <span className="hidden sm:inline">Syncing DB...</span>
             </>
           ) : (
             <>
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span className="hidden sm:inline">{totalRunsCount} Live Runs</span>
-              <RefreshCw className="w-3 h-3 text-emerald-400/60 hover:text-emerald-300 ml-0.5" />
+              <RefreshCw className="w-3 h-3 text-emerald-600/70 hover:text-emerald-700 dark:text-emerald-400/60 dark:hover:text-emerald-300 ml-0.5" />
             </>
           )}
         </button>
 
         {/* Model Count Badge */}
-        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold">
+        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-400 text-xs font-semibold">
           <Cpu className="w-3.5 h-3.5" />
           <span>{models.length} Models</span>
         </div>
@@ -139,9 +139,9 @@ export function Header() {
         {/* Upload / Ingest JSON to MongoDB Button */}
         <button
           onClick={() => setIsUploadOpen(true)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-400 border border-indigo-500/30 text-xs font-semibold transition-all shadow-sm"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 dark:bg-indigo-600/15 dark:hover:bg-indigo-600/25 dark:text-indigo-400 dark:border-indigo-500/30 text-xs font-semibold transition-all shadow-sm"
         >
-          <UploadCloud className="w-3.5 h-3.5" />
+          <UploadCloud className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           <span className="hidden sm:inline">Import to DB</span>
         </button>
 
@@ -151,7 +151,7 @@ export function Header() {
           aria-label="Toggle Theme"
           className="p-2.5 rounded-xl bg-[var(--bg-tertiary)]/70 border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:border-indigo-500/40 transition-all shadow-sm"
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-400" />}
+          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
         </button>
       </div>
 

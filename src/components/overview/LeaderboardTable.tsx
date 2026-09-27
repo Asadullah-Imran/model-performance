@@ -158,7 +158,7 @@ export function LeaderboardTable() {
                   <span className="text-[10px] text-[var(--text-muted)] font-medium block">
                     {rankMetric === 'all' ? 'Avg Rank' : rankMetric}
                   </span>
-                  <span className="text-sm font-mono font-bold text-indigo-400">
+                  <span className="text-sm font-mono font-bold text-indigo-600 dark:text-indigo-400">
                     {rankMetric === 'all'
                       ? `#${item.avgRank.toFixed(1)}`
                       : item.metricMeans[rankMetric]?.toFixed(4)}
