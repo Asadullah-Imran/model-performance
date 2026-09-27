@@ -8,12 +8,32 @@ scripts/
 ├── AriseSpatialGlue_4Encoder_1Layer.py   # 4-Encoder 1-Layer GCN with RNA PCA
 ├── Astra.py                             # ASTRA: Spot-Adaptive Gated GCN + Spatial Potts DEC
 ├── SpatialGlue.py                       # SpatialGlue: Dual-Attention Spatial Multi-Omics GNN
+├── Smart.py                             # SMART: Multi-Modal Graph Autoencoder with MNN Triplets
 └── README.md
 ```
 
 ## 🚀 Running Scripts
 
-### 1. Running SpatialGlue:
+### 1. Running SMART:
+```bash
+# Example A: Run SMART on 10x Human Lymph Node datasets with seeds 42 and 2024 (mclust)
+python scripts/Smart.py \
+  --datasets 0 1 \
+  --seeds 42 2024 \
+  --encoder SAGEConv \
+  --tool mclust \
+  --api_url https://model-performance.vercel.app/api/experiments/upload
+
+# Example B: Run all benchmark datasets with GCNConv encoder and KMeans clustering
+python scripts/Smart.py \
+  --datasets all \
+  --n_seeds 5 \
+  --encoder GCNConv \
+  --tool kmeans \
+  --api_url https://model-performance.vercel.app/api/experiments/upload
+```
+
+### 2. Running SpatialGlue:
 ```bash
 python scripts/SpatialGlue.py \
   --datasets 0 1 \
@@ -22,7 +42,7 @@ python scripts/SpatialGlue.py \
   --api_url https://model-performance.vercel.app/api/experiments/upload
 ```
 
-### 2. Running ARISE (4-Encoder 1-Layer):
+### 3. Running ARISE (4-Encoder 1-Layer):
 ```bash
 python scripts/AriseSpatialGlue_4Encoder_1Layer.py \
   --datasets 0 1 \
@@ -31,7 +51,7 @@ python scripts/AriseSpatialGlue_4Encoder_1Layer.py \
   --api_url https://model-performance.vercel.app/api/experiments/upload
 ```
 
-### 3. Running ASTRA (Gated GCN + Potts DEC):
+### 4. Running ASTRA (Gated GCN + Potts DEC):
 ```bash
 python scripts/Astra.py \
   --datasets 0 1 \
