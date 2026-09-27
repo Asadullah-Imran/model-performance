@@ -186,7 +186,7 @@ export const KNOWN_MODEL_PALETTES: Record<string, {
     badgeClass: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
     textClass: 'text-purple-600 dark:text-purple-400',
   },
-  cage: {
+  astra: {
     baseColor: '#38c28f', // Soft Minty Green (Bar 2)
     glowColor: 'rgba(56, 194, 143, 0.2)',
     bgSoft: 'rgba(56, 194, 143, 0.08)',
@@ -194,7 +194,7 @@ export const KNOWN_MODEL_PALETTES: Record<string, {
     badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
     textClass: 'text-emerald-600 dark:text-emerald-400',
   },
-  astra: {
+  cage: {
     baseColor: '#f45b69', // Soft Coral/Salmon Red (Bar 3)
     glowColor: 'rgba(244, 91, 105, 0.2)',
     bgSoft: 'rgba(244, 91, 105, 0.08)',
