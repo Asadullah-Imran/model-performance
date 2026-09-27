@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Database, Moon, Sun, Cpu, Sparkles, UploadCloud } from 'lucide-react';
+import { Database, Moon, Sun, Cpu, UploadCloud, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
 import { UploadExperimentModal } from '@/components/upload/UploadExperimentModal';
 
@@ -47,7 +47,17 @@ const ROUTE_TITLES: Record<string, { title: string; subtitle: string }> = {
 
 export function Header() {
   const pathname = usePathname();
-  const { datasets, selectedDataset, setSelectedDataset, theme, toggleTheme, models } = useDashboard();
+  const {
+    datasets,
+    selectedDataset,
+    setSelectedDataset,
+    theme,
+    toggleTheme,
+    models,
+    isLoading,
+    totalRunsCount,
+    refreshData,
+  } = useDashboard();
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
 
   const currentMeta = ROUTE_TITLES[pathname] || {
@@ -56,7 +66,12 @@ export function Header() {
   };
 
   return (
-    <header className="h-20 bg-[var(--bg-secondary)]/80 backdrop-blur-md border-b border-[var(--border-color)] px-8 flex items-center justify-between z-10 flex-shrink-0">
+    <header className="relative h-20 bg-[var(--bg-secondary)]/80 backdrop-blur-md border-b border-[var(--border-color)] px-8 flex items-center justify-between z-10 flex-shrink-0">
+      {/* Top Animated Loading Glow Bar */}
+      {isLoading && (
+        <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-pulse z-50 shadow-sm" />
+      )}
+
       {/* Title Area */}
       <div>
         <h1 className="text-xl font-heading font-bold text-[var(--text-primary)] flex items-center gap-2">
@@ -66,7 +81,7 @@ export function Header() {
       </div>
 
       {/* Controls Area */}
-      <div className="flex items-center gap-3.5">
+      <div className="flex items-center gap-3">
         {/* Dataset Selector */}
         <div className="flex items-center gap-2 bg-[var(--bg-tertiary)]/70 border border-[var(--border-color)] px-3 py-1.5 rounded-xl text-xs font-medium text-[var(--text-secondary)] shadow-sm">
           <Database className="w-3.5 h-3.5 text-indigo-400" />
@@ -90,10 +105,35 @@ export function Header() {
           </select>
         </div>
 
+        {/* Live DB / Sync Status Badge with Refresh action */}
+        <button
+          onClick={() => refreshData()}
+          disabled={isLoading}
+          title="Click to refresh latest runs from MongoDB"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all shadow-sm ${
+            isLoading
+              ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400 cursor-wait'
+              : 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/25 text-emerald-400 cursor-pointer'
+          }`}
+        >
+          {isLoading ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+              <span className="hidden sm:inline">Syncing DB...</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">{totalRunsCount} Live Runs</span>
+              <RefreshCw className="w-3 h-3 text-emerald-400/60 hover:text-emerald-300 ml-0.5" />
+            </>
+          )}
+        </button>
+
         {/* Model Count Badge */}
-        <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold">
+        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-semibold">
           <Cpu className="w-3.5 h-3.5" />
-          <span>{models.length} Models Active</span>
+          <span>{models.length} Models</span>
         </div>
 
         {/* Upload / Ingest JSON to MongoDB Button */}
@@ -102,7 +142,7 @@ export function Header() {
           className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-600/15 hover:bg-indigo-600/25 text-indigo-400 border border-indigo-500/30 text-xs font-semibold transition-all shadow-sm"
         >
           <UploadCloud className="w-3.5 h-3.5" />
-          <span>Import to DB</span>
+          <span className="hidden sm:inline">Import to DB</span>
         </button>
 
         {/* Theme Toggle Button */}
@@ -123,3 +163,4 @@ export function Header() {
     </header>
   );
 }
+

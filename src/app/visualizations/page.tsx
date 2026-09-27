@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Image as ImageIcon, MapPin, Eye, Layers, Sparkles, Split, ZoomIn } from 'lucide-react';
+import { Image as ImageIcon, MapPin, Eye, Layers, Sparkles, Split, ZoomIn, RefreshCw } from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
 
 type VisMode = 'spatial_dual' | 'umap_dual' | 'spatial_single' | 'umap_single';
@@ -20,6 +20,8 @@ export default function VisualizationsPage() {
   const [selectedSeed, setSelectedSeed] = useState<number>(42);
   const [visMode, setVisMode] = useState<VisMode>('spatial_dual');
   const [hoveredSpot, setHoveredSpot] = useState<{ idx: number; gt: string; pred: string; x: number; y: number } | null>(null);
+  const [dynamicEmbeddings, setDynamicEmbeddings] = useState<any>(null);
+  const [isFetchingEmb, setIsFetchingEmb] = useState<boolean>(false);
 
   const selectedModel = models.find(m => m.id === selectedModelId) || models[0];
   const activeDatasetObj = datasets.find(d => d.id === selectedDataset) || datasets[0];
@@ -48,13 +50,40 @@ export default function VisualizationsPage() {
     );
   }, [selectedModel, resultsByModel, selectedSeed]);
 
+  // On-demand fetch of spot coordinates and embeddings for the selected seed
+  React.useEffect(() => {
+    if (!selectedModel) return;
+    const targetDataset = selectedDataset === 'all' ? (activeRun?.datasetId || '10x_human_lymph_node_A1') : selectedDataset;
+    
+    if (activeRun?.embeddingsData?.spatialCoordinates?.length) {
+      setDynamicEmbeddings(activeRun.embeddingsData);
+      return;
+    }
+
+    setIsFetchingEmb(true);
+    fetch(`/api/experiments/embeddings?modelId=${selectedModel.id}&datasetId=${targetDataset}&seed=${selectedSeed}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data?.embeddingsData && Object.keys(data.embeddingsData).length > 0) {
+          setDynamicEmbeddings(data.embeddingsData);
+        } else {
+          setDynamicEmbeddings(null);
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load seed embeddings:', err);
+      })
+      .finally(() => setIsFetchingEmb(false));
+  }, [selectedModel?.id, selectedDataset, selectedSeed, activeRun]);
+
   const finalMetrics = activeRun?.finalMetrics || {};
   const currentAri = finalMetrics.ARI ?? finalMetrics.ari ?? 0;
   const currentSil = finalMetrics.Silhouette ?? finalMetrics.silhouette ?? 0;
 
   // Prepare normalized spot data for both Spatial and UMAP
   const { spatialSpots, umapSpots, gtClasses, predClasses } = useMemo(() => {
-    const emb = activeRun?.embeddingsData;
+    const emb = dynamicEmbeddings || activeRun?.embeddingsData;
+
     const sCoords = emb?.spatialCoordinates;
     const uCoords = emb?.umapCoordinates;
     const predLabels = emb?.predictedLabels || [];
@@ -63,7 +92,7 @@ export default function VisualizationsPage() {
     // Map ground truth labels to distinct indices and names
     const gtMap = new Map<string, number>();
     const gtList: Array<{ id: number; name: string; color: string; count: number }> = [];
-    gtLabels.forEach(l => {
+    gtLabels.forEach((l: string | number) => {
       const s = String(l);
       if (!gtMap.has(s)) {
         const id = gtMap.size;
@@ -77,7 +106,7 @@ export default function VisualizationsPage() {
     // Map predicted cluster labels to distinct indices and names
     const predMap = new Map<string, number>();
     const predList: Array<{ id: number; name: string; color: string; count: number }> = [];
-    predLabels.forEach(l => {
+    predLabels.forEach((l: string | number) => {
       const s = String(l);
       if (!predMap.has(s)) {
         const id = predMap.size;
@@ -219,8 +248,17 @@ export default function VisualizationsPage() {
 
           {/* Total Spot Count Badge */}
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium">
-            <MapPin className="w-3.5 h-3.5" />
-            <span>{totalSpots.toLocaleString()} Spots (100% Full Tissue)</span>
+            {isFetchingEmb ? (
+              <>
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>Loading coordinates...</span>
+              </>
+            ) : (
+              <>
+                <MapPin className="w-3.5 h-3.5" />
+                <span>{totalSpots.toLocaleString()} Spots (100% Full Tissue)</span>
+              </>
+            )}
           </div>
         </div>
 

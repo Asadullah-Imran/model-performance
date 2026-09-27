@@ -61,6 +61,8 @@ export interface SeedVisualizations {
 
 export interface SeedExperimentData {
   seed: number;
+  modelId?: string;
+  datasetId?: string;
   bestEpoch: number;
   bestScore?: number;
   durationSeconds?: number;

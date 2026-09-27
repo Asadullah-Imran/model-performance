@@ -8,6 +8,7 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const datasetId = searchParams.get('datasetId') || 'all';
+    const includeEmbeddings = searchParams.get('includeEmbeddings') === 'true';
 
     const conn = await connectToDatabase();
     
@@ -25,7 +26,13 @@ export async function GET(request: Request) {
       query.datasetId = datasetId;
     }
 
-    const runs = await ExperimentRunModel.find(query).lean();
+    // Exclude bulky embeddings coordinates arrays on main queries to keep response < 100KB
+    let runsQuery = ExperimentRunModel.find(query);
+    if (!includeEmbeddings) {
+      runsQuery = runsQuery.select('-embeddingsData');
+    }
+
+    const runs = await runsQuery.lean();
 
     return NextResponse.json({
       source: 'mongodb',
@@ -43,3 +50,4 @@ export async function GET(request: Request) {
     });
   }
 }
+

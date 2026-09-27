@@ -99,6 +99,8 @@ export function aggregateExperimentRuns(
     modelRuns.forEach(run => {
       seedsData[run.seed] = {
         seed: run.seed,
+        modelId: run.modelId,
+        datasetId: run.datasetId,
         bestEpoch: run.bestEpoch || 0,
         bestScore: run.bestScore || 0,
         durationSeconds: run.durationSeconds,
