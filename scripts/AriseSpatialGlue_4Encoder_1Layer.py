@@ -1114,8 +1114,8 @@ def run_experiment(
             spatial_coords = adata_RNA.obsm.get('spatial', None)
 
             export_dashboard_experiment(
-                model_id="Arise-4Encoder-1Layer",
-                model_name="Arise 4-Encoder 1-Layer",
+                model_id="MUSE-GCN",
+                model_name="MUSE-GCN",
                 dataset_name=dataset_name,
                 seed=seed,
                 metrics_dict={

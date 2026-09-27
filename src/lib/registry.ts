@@ -270,7 +270,7 @@ export function resolveModelColorTheme(modelId: string, modelName: string = '', 
   const cleanName = (modelName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
   // Check known palettes
-  if (cleanId.includes('arisespatialglue') || cleanId.includes('4encoder') || cleanName.includes('4encoder')) {
+  if (cleanId.includes('muse') || cleanName.includes('muse') || cleanId.includes('arisespatialglue') || cleanId.includes('4encoder') || cleanName.includes('4encoder')) {
     return KNOWN_MODEL_PALETTES.arisespatialglue;
   }
   if (cleanId.startsWith('arise') || cleanName.startsWith('arise')) {

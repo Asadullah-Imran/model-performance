@@ -22,6 +22,18 @@ export async function GET(request: Request) {
     }
 
     const models = await ModelModel.find({}).lean();
+    
+    // Auto-sync legacy run modelIds if a model was renamed to MUSE-GCN in database
+    const hasMuseGcn = models.some(m => m.id === 'MUSE-GCN' || m.name === 'MUSE-GCN');
+    if (hasMuseGcn) {
+      await ExperimentRunModel.updateMany(
+        { modelId: { $in: ['Arise-4Encoder-1Layer', 'Arise 4-Encoder 1-Layer', 'AriseSpatialGlue_4Encoder_1Layer'] } },
+        { $set: { modelId: 'MUSE-GCN', modelName: 'MUSE-GCN' } }
+      );
+      // Clean up orphaned legacy model metadata if it exists
+      await ModelModel.deleteMany({ id: { $in: ['Arise-4Encoder-1Layer', 'Arise 4-Encoder 1-Layer', 'AriseSpatialGlue_4Encoder_1Layer'] } });
+    }
+
     const query: any = {};
     if (datasetId !== 'all') {
       query.datasetId = datasetId;
@@ -39,9 +51,12 @@ export async function GET(request: Request) {
 
     const runs = await runsQuery.lean();
 
+    // Reload models if any legacy models were cleaned up
+    const activeModels = hasMuseGcn ? await ModelModel.find({}).lean() : models;
+
     return NextResponse.json({
       source: 'mongodb',
-      models,
+      models: activeModels,
       runsCount: runs.length,
       runs,
     });
