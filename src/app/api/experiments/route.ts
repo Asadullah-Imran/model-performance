@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const datasetId = searchParams.get('datasetId') || 'all';
     const includeEmbeddings = searchParams.get('includeEmbeddings') === 'true';
+    const includeCurves = searchParams.get('includeCurves') === 'true';
 
     const conn = await connectToDatabase();
     
@@ -26,10 +27,14 @@ export async function GET(request: Request) {
       query.datasetId = datasetId;
     }
 
-    // Exclude bulky embeddings coordinates arrays on main queries to keep response < 100KB
+    // Tier 1 Fast Load: Exclude bulky embeddings and epoch histories on main queries to keep payload ~15KB
     let runsQuery = ExperimentRunModel.find(query);
-    if (!includeEmbeddings) {
+    if (!includeEmbeddings && !includeCurves) {
+      runsQuery = runsQuery.select('-embeddingsData -history');
+    } else if (!includeEmbeddings) {
       runsQuery = runsQuery.select('-embeddingsData');
+    } else if (!includeCurves) {
+      runsQuery = runsQuery.select('-history');
     }
 
     const runs = await runsQuery.lean();

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,7 +13,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import { TrendingUp, Layers, Activity, Cpu } from 'lucide-react';
+import { TrendingUp, Layers, Activity, Cpu, RefreshCw } from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
 import { calculateMean, calculateSEM } from '@/lib/statistics';
 import { LOSS_REGISTRY } from '@/lib/registry';
@@ -21,7 +21,7 @@ import { LOSS_REGISTRY } from '@/lib/registry';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 export default function CurvesPage() {
-  const { models, resultsByModel, theme } = useDashboard();
+  const { models, resultsByModel, selectedDataset, theme } = useDashboard();
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   const [curveMetric, setCurveMetric] = useState<string>('ARI');
   const [showAllSeeds, setShowAllSeeds] = useState<boolean>(true);
@@ -31,14 +31,58 @@ export default function CurvesPage() {
     spatial_loss: true,
     reg_loss: true,
   });
+  const [curvesCache, setCurvesCache] = useState<Record<string, Record<number, any[]>>>({});
+  const [isFetchingCurves, setIsFetchingCurves] = useState<boolean>(false);
 
   const isDark = theme === 'dark';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
   const textColor = isDark ? '#94a3b8' : '#64748b';
 
   const selectedModel = models.find(m => m.id === selectedModelId) || models[0];
-  const modelSeedsData = selectedModel ? resultsByModel[selectedModel.id]?.seeds || {} : {};
-  const seedList = Object.values(modelSeedsData);
+
+  // Tier 2: Fetch epoch trajectories on demand for the selected model
+  useEffect(() => {
+    if (!selectedModel) return;
+    const cacheKey = `${selectedModel.id}_${selectedDataset}`;
+    if (curvesCache[cacheKey]) return;
+
+    setIsFetchingCurves(true);
+    fetch(`/api/experiments/curves?modelId=${selectedModel.id}&datasetId=${selectedDataset}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data?.runs && Array.isArray(data.runs)) {
+          const seedsMap: Record<number, any[]> = {};
+          data.runs.forEach((r: any) => {
+            if (r.seed !== undefined && r.history) {
+              seedsMap[r.seed] = r.history;
+            }
+          });
+          setCurvesCache(prev => ({
+            ...prev,
+            [cacheKey]: seedsMap,
+          }));
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load curve history:', err);
+      })
+      .finally(() => setIsFetchingCurves(false));
+  }, [selectedModel?.id, selectedDataset, curvesCache]);
+
+  const currentCurvesMap = selectedModel ? curvesCache[`${selectedModel.id}_${selectedDataset}`] || {} : {};
+
+  // Combine seed summaries with dynamically fetched epoch histories
+  const seedList = useMemo(() => {
+    if (!selectedModel) return [];
+    const baseSeeds = resultsByModel[selectedModel.id]?.seeds || {};
+    return Object.values(baseSeeds).map(s => {
+      const dynamicHistory = currentCurvesMap[s.seed];
+      return {
+        ...s,
+        history: dynamicHistory && dynamicHistory.length > 0 ? dynamicHistory : (s.history || []),
+      };
+    });
+  }, [selectedModel, resultsByModel, currentCurvesMap]);
 
   // Extract epoch labels from the first seed history
   const epochLabels = (seedList[0]?.history || []).map(h => `Ep ${h.epoch}`);
@@ -227,7 +271,14 @@ export default function CurvesPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {isFetchingCurves && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs font-medium">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span>Loading curves...</span>
+            </div>
+          )}
+
           <label className="text-xs text-[var(--text-muted)] font-medium flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
