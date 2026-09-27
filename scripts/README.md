@@ -5,6 +5,7 @@ This directory houses the standalone deep-learning model training pipelines for 
 ## 📁 Directory Structure
 ```text
 scripts/
+├── Arise.py                             # ARISE: Spatially-Regularized Dual GCN Multimodal Clustering
 ├── AriseSpatialGlue_4Encoder_1Layer.py   # 4-Encoder 1-Layer GCN with RNA PCA
 ├── Astra.py                             # ASTRA: Spot-Adaptive Gated GCN + Spatial Potts DEC
 ├── SpatialGlue.py                       # SpatialGlue: Dual-Attention Spatial Multi-Omics GNN
@@ -14,7 +15,25 @@ scripts/
 
 ## 🚀 Running Scripts
 
-### 1. Running SMART:
+### 1. Running ARISE:
+```bash
+# Example A: Run ARISE on 10x Human Lymph Node datasets with seeds 42 and 2024 (mclust)
+python scripts/Arise.py \
+  --datasets 0 1 \
+  --seeds 42 2024 \
+  --epochs 350 \
+  --tool mclust \
+  --api_url https://model-performance.vercel.app/api/experiments/upload
+
+# Example B: Run all benchmark datasets with KMeans clustering
+python scripts/Arise.py \
+  --datasets all \
+  --n_seeds 5 \
+  --tool kmeans \
+  --api_url https://model-performance.vercel.app/api/experiments/upload
+```
+
+### 2. Running SMART:
 ```bash
 # Example A: Run SMART on 10x Human Lymph Node datasets with seeds 42 and 2024 (mclust)
 python scripts/Smart.py \
@@ -33,7 +52,7 @@ python scripts/Smart.py \
   --api_url https://model-performance.vercel.app/api/experiments/upload
 ```
 
-### 2. Running SpatialGlue:
+### 3. Running SpatialGlue:
 ```bash
 python scripts/SpatialGlue.py \
   --datasets 0 1 \
@@ -42,7 +61,7 @@ python scripts/SpatialGlue.py \
   --api_url https://model-performance.vercel.app/api/experiments/upload
 ```
 
-### 3. Running ARISE (4-Encoder 1-Layer):
+### 4. Running ARISE (4-Encoder 1-Layer):
 ```bash
 python scripts/AriseSpatialGlue_4Encoder_1Layer.py \
   --datasets 0 1 \
@@ -51,7 +70,7 @@ python scripts/AriseSpatialGlue_4Encoder_1Layer.py \
   --api_url https://model-performance.vercel.app/api/experiments/upload
 ```
 
-### 4. Running ASTRA (Gated GCN + Potts DEC):
+### 5. Running ASTRA (Gated GCN + Potts DEC):
 ```bash
 python scripts/Astra.py \
   --datasets 0 1 \
