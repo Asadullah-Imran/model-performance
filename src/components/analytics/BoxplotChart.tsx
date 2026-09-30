@@ -6,17 +6,19 @@ import { useDashboard } from '@/context/DashboardContext';
 import { calculateQuartiles } from '@/lib/statistics';
 
 export function BoxplotChart() {
-  const { models, resultsByModel, selectedMetric, theme } = useDashboard();
+  const { models, filteredModels, resultsByModel, selectedMetric, theme } = useDashboard();
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const displayModels = filteredModels.length > 0 ? filteredModels : models;
 
   const isDark = theme === 'dark';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';
   const textColor = isDark ? '#94a3b8' : '#475569';
   const strokeColor = isDark ? '#e2e8f0' : '#1e293b';
 
-  // Compute stats for each model
+  // Compute stats for each filtered model
   const modelStats = useMemo(() => {
-    return models.map(model => {
+    return displayModels.map(model => {
       const values = resultsByModel[model.id]?.aggregatedMetrics?.[selectedMetric]?.values || [];
       const quartiles = calculateQuartiles(values);
       return {
@@ -25,7 +27,7 @@ export function BoxplotChart() {
         count: values.length,
       };
     });
-  }, [models, resultsByModel, selectedMetric]);
+  }, [displayModels, resultsByModel, selectedMetric]);
 
   // Determine seed count for subtitle
   const maxSeeds = Math.max(...modelStats.map(s => s.count), 0);
@@ -82,8 +84,8 @@ export function BoxplotChart() {
     return marginTop + (1 - ratio) * plotHeight;
   };
 
-  const colWidth = models.length > 0 ? plotWidth / models.length : plotWidth;
-  const boxWidth = Math.min(46, colWidth * 0.52);
+  const colWidth = displayModels.length > 0 ? plotWidth / displayModels.length : plotWidth;
+  const boxWidth = Math.min(52, colWidth * 0.52);
   const capWidth = boxWidth * 0.65;
 
   return (

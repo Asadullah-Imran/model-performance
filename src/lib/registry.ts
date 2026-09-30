@@ -210,13 +210,21 @@ export const KNOWN_MODEL_PALETTES: Record<string, {
     badgeClass: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20',
     textClass: 'text-pink-600 dark:text-pink-400',
   },
+  muse: {
+    baseColor: '#0ea5e9', // Vibrant Sky / Cyan Blue (High contrast vs Pink ARISE)
+    glowColor: 'rgba(14, 165, 233, 0.2)',
+    bgSoft: 'rgba(14, 165, 233, 0.08)',
+    borderClass: 'border-sky-500/40',
+    badgeClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+    textClass: 'text-sky-600 dark:text-sky-400',
+  },
   arisespatialglue: {
-    baseColor: '#ff6584', // Watermelon Rose
-    glowColor: 'rgba(255, 101, 132, 0.2)',
-    bgSoft: 'rgba(255, 101, 132, 0.08)',
-    borderClass: 'border-rose-500/40',
-    badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20',
-    textClass: 'text-rose-600 dark:text-rose-400',
+    baseColor: '#0ea5e9', // Vibrant Sky / Cyan Blue
+    glowColor: 'rgba(14, 165, 233, 0.2)',
+    bgSoft: 'rgba(14, 165, 233, 0.08)',
+    borderClass: 'border-sky-500/40',
+    badgeClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+    textClass: 'text-sky-600 dark:text-sky-400',
   },
   spatialglue: {
     baseColor: '#f5a638', // Warm Amber/Golden Orange (Bar 5)
@@ -235,17 +243,17 @@ export const KNOWN_MODEL_PALETTES: Record<string, {
     textClass: 'text-violet-600 dark:text-violet-400',
   },
   stagate: {
-    baseColor: '#38bdf8', // Sky Blue
-    glowColor: 'rgba(56, 189, 248, 0.2)',
-    bgSoft: 'rgba(56, 189, 248, 0.08)',
-    borderClass: 'border-sky-500/40',
-    badgeClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
-    textClass: 'text-sky-600 dark:text-sky-400',
+    baseColor: '#14b8a6', // Teal
+    glowColor: 'rgba(20, 184, 166, 0.2)',
+    bgSoft: 'rgba(20, 184, 166, 0.08)',
+    borderClass: 'border-teal-500/40',
+    badgeClass: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20',
+    textClass: 'text-teal-600 dark:text-teal-400',
   },
 };
 
 // Generates dynamic theme tokens for any new or custom model
-const PALETTE_HEXES = ['#936bf5', '#38c28f', '#f45b69', '#fa4d9f', '#f5a638', '#38bdf8', '#a78bfa', '#ff6584'];
+const PALETTE_HEXES = ['#936bf5', '#38c28f', '#f45b69', '#fa4d9f', '#f5a638', '#0ea5e9', '#a78bfa', '#14b8a6'];
 
 export function generateModelColorTheme(indexOrSeed: number) {
   const hex = PALETTE_HEXES[Math.abs(indexOrSeed) % PALETTE_HEXES.length];
@@ -271,7 +279,7 @@ export function resolveModelColorTheme(modelId: string, modelName: string = '', 
 
   // Check known palettes
   if (cleanId.includes('muse') || cleanName.includes('muse') || cleanId.includes('arisespatialglue') || cleanId.includes('4encoder') || cleanName.includes('4encoder')) {
-    return KNOWN_MODEL_PALETTES.arisespatialglue;
+    return KNOWN_MODEL_PALETTES.muse;
   }
   if (cleanId.startsWith('arise') || cleanName.startsWith('arise')) {
     return KNOWN_MODEL_PALETTES.arise;

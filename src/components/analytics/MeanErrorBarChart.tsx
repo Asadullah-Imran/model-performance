@@ -18,16 +18,18 @@ import { useDashboard } from '@/context/DashboardContext';
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export function MeanErrorBarChart() {
-  const { models, resultsByModel, selectedMetric, theme } = useDashboard();
+  const { models, filteredModels, resultsByModel, selectedMetric, theme } = useDashboard();
   const isDark = theme === 'dark';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
   const textColor = isDark ? '#94a3b8' : '#64748b';
   const labelTextColor = isDark ? '#f8fafc' : '#0f172a';
 
-  const labels = models.map(m => m.name);
-  const means = models.map(m => resultsByModel[m.id]?.aggregatedMetrics?.[selectedMetric]?.mean ?? 0);
-  const sems = models.map(m => resultsByModel[m.id]?.aggregatedMetrics?.[selectedMetric]?.sem ?? 0);
-  const stdDevs = models.map(m => resultsByModel[m.id]?.aggregatedMetrics?.[selectedMetric]?.stdDev ?? 0);
+  const displayModels = filteredModels.length > 0 ? filteredModels : models;
+
+  const labels = displayModels.map(m => m.name);
+  const means = displayModels.map(m => resultsByModel[m.id]?.aggregatedMetrics?.[selectedMetric]?.mean ?? 0);
+  const sems = displayModels.map(m => resultsByModel[m.id]?.aggregatedMetrics?.[selectedMetric]?.sem ?? 0);
+  const stdDevs = displayModels.map(m => resultsByModel[m.id]?.aggregatedMetrics?.[selectedMetric]?.stdDev ?? 0);
 
   const maxMean = Math.max(...means, 0);
   const suggestedMax = maxMean > 0 ? maxMean * 1.22 : 0.4;
@@ -38,7 +40,7 @@ export function MeanErrorBarChart() {
       {
         label: `Mean ${selectedMetric}`,
         data: means,
-        backgroundColor: models.map(m => m.colorTheme.baseColor),
+        backgroundColor: displayModels.map(m => m.colorTheme.baseColor),
         borderRadius: 6,
         maxBarThickness: 56,
       },

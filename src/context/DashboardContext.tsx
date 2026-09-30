@@ -26,6 +26,12 @@ interface DashboardContextType {
   models: ModelMetadata[];
   selectedModelId: string;
   setSelectedModelId: (id: string) => void;
+  selectedModelIds: string[];
+  setSelectedModelIds: (ids: string[]) => void;
+  toggleModelFilter: (modelId: string) => void;
+  selectAllModels: () => void;
+  deselectAllModels: () => void;
+  filteredModels: ModelMetadata[];
 
   // Results & Live Data
   resultsByModel: Record<string, ModelDatasetResults>;
@@ -182,6 +188,49 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     }
   }, [aggregatedData.models, selectedModelId]);
 
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
+
+  // When models load, default selectedModelIds to all models if empty
+  useEffect(() => {
+    if (aggregatedData.models.length > 0) {
+      setSelectedModelIds(prev => {
+        if (prev.length === 0) {
+          return aggregatedData.models.map(m => m.id);
+        }
+        const valid = prev.filter(id => aggregatedData.models.some(m => m.id === id));
+        return valid.length > 0 ? valid : aggregatedData.models.map(m => m.id);
+      });
+    }
+  }, [aggregatedData.models]);
+
+  const toggleModelFilter = useCallback((modelId: string) => {
+    setSelectedModelIds(prev => {
+      if (prev.includes(modelId)) {
+        if (prev.length <= 1) return prev; // Keep at least one model active
+        return prev.filter(id => id !== modelId);
+      } else {
+        return [...prev, modelId];
+      }
+    });
+  }, []);
+
+  const selectAllModels = useCallback(() => {
+    setSelectedModelIds(aggregatedData.models.map(m => m.id));
+  }, [aggregatedData.models]);
+
+  const deselectAllModels = useCallback(() => {
+    if (aggregatedData.models.length > 0) {
+      setSelectedModelIds([aggregatedData.models[0].id]);
+    }
+  }, [aggregatedData.models]);
+
+  const filteredModels = useMemo(() => {
+    if (selectedModelIds.length === 0) {
+      return aggregatedData.models;
+    }
+    return aggregatedData.models.filter(m => selectedModelIds.includes(m.id));
+  }, [aggregatedData.models, selectedModelIds]);
+
   const value = {
     datasets: DATASET_REGISTRY,
     selectedDataset,
@@ -192,6 +241,12 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     models: aggregatedData.models,
     selectedModelId,
     setSelectedModelId,
+    selectedModelIds,
+    setSelectedModelIds,
+    toggleModelFilter,
+    selectAllModels,
+    deselectAllModels,
+    filteredModels,
     resultsByModel: aggregatedData.resultsByModel,
     rawRecords: aggregatedData.rawRecords,
     totalRunsCount: dbRuns.length,

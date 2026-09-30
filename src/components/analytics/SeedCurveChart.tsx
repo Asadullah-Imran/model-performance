@@ -17,20 +17,22 @@ import { useDashboard } from '@/context/DashboardContext';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 export function SeedCurveChart() {
-  const { models, resultsByModel, selectedMetric, theme } = useDashboard();
+  const { models, filteredModels, resultsByModel, selectedMetric, theme } = useDashboard();
   const [selectedModelFilter, setSelectedModelFilter] = useState<string>('all');
 
   const isDark = theme === 'dark';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)';
   const textColor = isDark ? '#94a3b8' : '#64748b';
 
+  const baseModels = filteredModels.length > 0 ? filteredModels : models;
+
   // Extract seed labels from first model
-  const firstModelId = models[0]?.id;
+  const firstModelId = baseModels[0]?.id || models[0]?.id;
   const sampleSeeds = Object.keys(resultsByModel[firstModelId]?.seeds || {}).map(s => `Seed ${s}`);
 
   const activeModels = selectedModelFilter === 'all'
-    ? models.slice(0, 5)
-    : models.filter(m => m.id === selectedModelFilter);
+    ? baseModels
+    : baseModels.filter(m => m.id === selectedModelFilter);
 
   const datasets = activeModels.map(model => {
     const seedsObj = resultsByModel[model.id]?.seeds || {};
@@ -92,10 +94,10 @@ export function SeedCurveChart() {
         <select
           value={selectedModelFilter}
           onChange={e => setSelectedModelFilter(e.target.value)}
-          className="bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none"
+          className="bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-primary)] text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer"
         >
-          <option value="all">Compare All Models</option>
-          {models.map(m => (
+          <option value="all">Compare Selected ({baseModels.length})</option>
+          {baseModels.map(m => (
             <option key={m.id} value={m.id}>
               {m.name} Only
             </option>

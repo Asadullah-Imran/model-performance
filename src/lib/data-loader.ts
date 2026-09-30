@@ -40,11 +40,11 @@ export function aggregateExperimentRuns(
   // Build model map from provided list with distinct signature color themes
   const modelMap: Record<string, ModelMetadata> = {};
   modelsList.forEach((m, idx) => {
-    // Check if the color is missing or the generic default blue
-    const isGenericDefault = !m.colorTheme || m.colorTheme.baseColor === 'hsl(215, 90%, 55%)';
+    // Always apply canonical distinct theme for known models to prevent collisions
+    const canonicalTheme = resolveModelColorTheme(m.id, m.name, idx);
     modelMap[m.id] = {
       ...m,
-      colorTheme: isGenericDefault ? resolveModelColorTheme(m.id, m.name, idx) : m.colorTheme,
+      colorTheme: canonicalTheme,
     };
   });
 
