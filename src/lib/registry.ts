@@ -242,6 +242,14 @@ export const KNOWN_MODEL_PALETTES: Record<string, {
     badgeClass: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
     textClass: 'text-violet-600 dark:text-violet-400',
   },
+  spallm: {
+    baseColor: '#6366f1', // Electric Indigo Blue
+    glowColor: 'rgba(99, 102, 241, 0.2)',
+    bgSoft: 'rgba(99, 102, 241, 0.08)',
+    borderClass: 'border-indigo-500/40',
+    badgeClass: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
+    textClass: 'text-indigo-600 dark:text-indigo-400',
+  },
   stagate: {
     baseColor: '#14b8a6', // Teal
     glowColor: 'rgba(20, 184, 166, 0.2)',
@@ -253,7 +261,20 @@ export const KNOWN_MODEL_PALETTES: Record<string, {
 };
 
 // Generates dynamic theme tokens for any new or custom model
-const PALETTE_HEXES = ['#936bf5', '#38c28f', '#f45b69', '#fa4d9f', '#f5a638', '#0ea5e9', '#a78bfa', '#14b8a6'];
+export const PALETTE_HEXES = [
+  '#0ea5e9', // Sky Cyan Blue (MUSE-GCN)
+  '#fa4d9f', // Neon Rose Pink (ARISE)
+  '#936bf5', // Soft Vibrant Purple (SMART)
+  '#38c28f', // Soft Mint Emerald (ASTRA)
+  '#f5a638', // Warm Amber Gold (SpatialGlue)
+  '#6366f1', // Electric Indigo (spaLLM)
+  '#f45b69', // Coral Salmon Red (CAGE)
+  '#14b8a6', // Teal (STAGATE)
+  '#d946ef', // Electric Fuchsia
+  '#a78bfa', // Lavender (SEDR)
+  '#84cc16', // Lime Green
+  '#f97316', // Vibrant Orange
+];
 
 export function generateModelColorTheme(indexOrSeed: number) {
   const hex = PALETTE_HEXES[Math.abs(indexOrSeed) % PALETTE_HEXES.length];
@@ -269,7 +290,7 @@ export function generateModelColorTheme(indexOrSeed: number) {
 
 /**
  * Resolves a model's distinct color theme:
- * 1. Matches against known canonical models (SMART, SpatialGlue, ARISE, Astra, CAGE, etc.)
+ * 1. Matches against known canonical models (SMART, SpatialGlue, ARISE, Astra, CAGE, spaLLM, etc.)
  * 2. If existing theme is just the default blue fallback, replaces with canonical distinct color
  * 3. Otherwise generates a distinct deterministic color by index/hash
  */
@@ -278,6 +299,9 @@ export function resolveModelColorTheme(modelId: string, modelName: string = '', 
   const cleanName = (modelName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
   // Check known palettes
+  if (cleanId.includes('spallm') || cleanName.includes('spallm')) {
+    return KNOWN_MODEL_PALETTES.spallm;
+  }
   if (cleanId.includes('muse') || cleanName.includes('muse') || cleanId.includes('arisespatialglue') || cleanId.includes('4encoder') || cleanName.includes('4encoder')) {
     return KNOWN_MODEL_PALETTES.muse;
   }

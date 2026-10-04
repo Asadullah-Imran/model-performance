@@ -15,11 +15,13 @@ import {
   Layers,
   ExternalLink,
   Activity,
+  BarChart3,
 } from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Overview', icon: LayoutDashboard },
+  { href: '/overall', label: 'Overall Performance', icon: BarChart3 },
   { href: '/analytics', label: 'Detailed Analytics', icon: LineChart },
   { href: '/comparison', label: 'Head-to-Head', icon: GitCompare },
   { href: '/ablation', label: 'Ablation & Weights', icon: Sliders },

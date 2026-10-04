@@ -12,6 +12,10 @@ const ROUTE_TITLES: Record<string, { title: string; subtitle: string }> = {
     title: 'Overview Dashboard',
     subtitle: 'Aggregate multi-metric evaluation and global benchmark leaderboard',
   },
+  '/overall': {
+    title: 'Overall Performance Benchmark',
+    subtitle: 'Dataset-wise performance bar charts, cross-dataset comparisons, and model rankings',
+  },
   '/analytics': {
     title: 'Detailed Analytics',
     subtitle: 'Score distributions, multi-seed consistency, and standard error bounds',

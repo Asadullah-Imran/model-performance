@@ -353,15 +353,15 @@ export default function VisualizationsPage() {
                 </svg>
               </div>
 
-              {/* Bottom Ground Truth Legend Pills */}
-              <div className="mt-4 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+              {/* Bottom Ground Truth Legend Pills - Display all labels cleanly without scrollbar */}
+              <div className="mt-4 flex flex-wrap gap-1.5 pt-1">
                 {gtClasses.map(cls => (
                   <div
                     key={cls.id}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--bg-tertiary)] text-[11px] font-medium border border-[var(--border-color)]"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--bg-tertiary)] text-[11px] font-medium border border-[var(--border-color)] transition-all hover:border-indigo-500/40"
                   >
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cls.color }} />
-                    <span className="text-[var(--text-primary)] truncate max-w-[120px]">{cls.name}</span>
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: cls.color }} />
+                    <span className="text-[var(--text-primary)] font-medium">{cls.name}</span>
                     <span className="text-[var(--text-muted)] font-mono text-[10px]">({cls.count})</span>
                   </div>
                 ))}
@@ -414,15 +414,15 @@ export default function VisualizationsPage() {
                 </svg>
               </div>
 
-              {/* Bottom Predicted Domains Legend Pills */}
-              <div className="mt-4 flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+              {/* Bottom Predicted Domains Legend Pills - Display all labels cleanly without scrollbar */}
+              <div className="mt-4 flex flex-wrap gap-1.5 pt-1">
                 {predClasses.map(cls => (
                   <div
                     key={cls.id}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--bg-tertiary)] text-[11px] font-medium border border-[var(--border-color)]"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--bg-tertiary)] text-[11px] font-medium border border-[var(--border-color)] transition-all hover:border-indigo-500/40"
                   >
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: cls.color }} />
-                    <span className="text-[var(--text-primary)]">{cls.name}</span>
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: cls.color }} />
+                    <span className="text-[var(--text-primary)] font-medium">{cls.name}</span>
                     <span className="text-[var(--text-muted)] font-mono text-[10px]">({cls.count})</span>
                   </div>
                 ))}

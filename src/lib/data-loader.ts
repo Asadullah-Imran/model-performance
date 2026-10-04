@@ -11,6 +11,7 @@ import {
   METRIC_REGISTRY,
   generateModelColorTheme,
   resolveModelColorTheme,
+  PALETTE_HEXES,
 } from './registry';
 import {
   calculateMean,
@@ -37,11 +38,24 @@ export function aggregateExperimentRuns(
   const datasets = DATASET_REGISTRY;
   const metrics = METRIC_REGISTRY;
 
-  // Build model map from provided list with distinct signature color themes
+  // Track used colors to guarantee zero color collisions across all models
+  const usedColors = new Set<string>();
   const modelMap: Record<string, ModelMetadata> = {};
+
   modelsList.forEach((m, idx) => {
-    // Always apply canonical distinct theme for known models to prevent collisions
-    const canonicalTheme = resolveModelColorTheme(m.id, m.name, idx);
+    let canonicalTheme = resolveModelColorTheme(m.id, m.name, idx);
+
+    if (usedColors.has(canonicalTheme.baseColor)) {
+      const fallbackHex = PALETTE_HEXES.find(c => !usedColors.has(c)) || PALETTE_HEXES[(idx + 4) % PALETTE_HEXES.length];
+      canonicalTheme = {
+        ...canonicalTheme,
+        baseColor: fallbackHex,
+        glowColor: `${fallbackHex}33`,
+        bgSoft: `${fallbackHex}14`,
+      };
+    }
+    usedColors.add(canonicalTheme.baseColor);
+
     modelMap[m.id] = {
       ...m,
       colorTheme: canonicalTheme,
@@ -67,6 +81,18 @@ export function aggregateExperimentRuns(
 
     // If model wasn't registered in metadata, dynamically construct it from run
     if (!modelMap[modelId]) {
+      let dynamicTheme = resolveModelColorTheme(modelId, run.modelName || modelId, Object.keys(modelMap).length);
+      if (usedColors.has(dynamicTheme.baseColor)) {
+        const fallbackHex = PALETTE_HEXES.find(c => !usedColors.has(c)) || PALETTE_HEXES[(Object.keys(modelMap).length + 4) % PALETTE_HEXES.length];
+        dynamicTheme = {
+          ...dynamicTheme,
+          baseColor: fallbackHex,
+          glowColor: `${fallbackHex}33`,
+          bgSoft: `${fallbackHex}14`,
+        };
+      }
+      usedColors.add(dynamicTheme.baseColor);
+
       modelMap[modelId] = {
         id: modelId,
         name: run.modelName || modelId,
@@ -74,7 +100,7 @@ export function aggregateExperimentRuns(
         description: 'Auto-registered model from experiment pipeline',
         architecture: 'Deep Learning Model',
         hyperparameters: {},
-        colorTheme: resolveModelColorTheme(modelId, run.modelName || modelId, Object.keys(modelMap).length),
+        colorTheme: dynamicTheme,
       };
     }
 
@@ -165,3 +191,108 @@ export function aggregateExperimentRuns(
     rawRecords,
   };
 }
+
+export interface DatasetAggregatedResult {
+  dataset: DatasetInfo;
+  models: ModelMetadata[];
+  resultsByModel: Record<string, ModelDatasetResults>;
+  bestModelId: string | null;
+  bestScore: number | null;
+  runsCount: number;
+}
+
+/**
+ * Aggregates all runs grouped by dataset for cross-dataset overall benchmark analysis.
+ */
+export function aggregateAllDatasetsResults(
+  runs: any[],
+  modelsList: ModelMetadata[] = [],
+  metricKey: string = 'ARI'
+): {
+  datasets: DatasetInfo[];
+  datasetResults: Record<string, DatasetAggregatedResult>;
+  models: ModelMetadata[];
+  metrics: MetricDefinition[];
+  globalModelAverages: Record<string, { mean: number; datasetCount: number }>;
+} {
+  const baseAgg = aggregateExperimentRuns(runs, modelsList, 'all');
+  const allModels = baseAgg.models;
+  const metrics = METRIC_REGISTRY;
+  const targetMetric = metrics.find(m => m.key === metricKey) || metrics[0];
+  const higherIsBetter = targetMetric.direction === 'higher_is_better';
+
+  // Group raw runs by datasetId
+  const runsByDatasetId: Record<string, any[]> = {};
+  runs.forEach(run => {
+    const dsId = run.datasetId || 'unknown';
+    if (!runsByDatasetId[dsId]) {
+      runsByDatasetId[dsId] = [];
+    }
+    runsByDatasetId[dsId].push(run);
+  });
+
+  // Ensure all registered datasets are represented, even if some have 0 runs
+  const datasetResults: Record<string, DatasetAggregatedResult> = {};
+  const activeDatasets: DatasetInfo[] = [];
+
+  DATASET_REGISTRY.forEach(ds => {
+    const dsRuns = runsByDatasetId[ds.id] || [];
+    const dsAgg = aggregateExperimentRuns(dsRuns, allModels, ds.id);
+
+    let bestModelId: string | null = null;
+    let bestScore: number | null = null;
+
+    Object.keys(dsAgg.resultsByModel).forEach(modelId => {
+      const score = dsAgg.resultsByModel[modelId]?.aggregatedMetrics?.[metricKey]?.mean;
+      if (score !== undefined && typeof score === 'number') {
+        if (bestScore === null) {
+          bestScore = score;
+          bestModelId = modelId;
+        } else if (higherIsBetter ? score > bestScore : score < bestScore) {
+          bestScore = score;
+          bestModelId = modelId;
+        }
+      }
+    });
+
+    datasetResults[ds.id] = {
+      dataset: ds,
+      models: dsAgg.models,
+      resultsByModel: dsAgg.resultsByModel,
+      bestModelId,
+      bestScore,
+      runsCount: dsRuns.length,
+    };
+
+    activeDatasets.push(ds);
+  });
+
+  // Calculate global average per model across all datasets
+  const globalModelAverages: Record<string, { mean: number; datasetCount: number }> = {};
+  allModels.forEach(model => {
+    let totalScore = 0;
+    let count = 0;
+
+    Object.values(datasetResults).forEach(dsResult => {
+      const score = dsResult.resultsByModel[model.id]?.aggregatedMetrics?.[metricKey]?.mean;
+      if (score !== undefined && typeof score === 'number' && !isNaN(score)) {
+        totalScore += score;
+        count += 1;
+      }
+    });
+
+    globalModelAverages[model.id] = {
+      mean: count > 0 ? Number((totalScore / count).toFixed(4)) : 0,
+      datasetCount: count,
+    };
+  });
+
+  return {
+    datasets: activeDatasets,
+    datasetResults,
+    models: allModels,
+    metrics,
+    globalModelAverages,
+  };
+}
+
