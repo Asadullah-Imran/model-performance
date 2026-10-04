@@ -2,7 +2,22 @@
 
 import React, { useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Database, Moon, Sun, Cpu, UploadCloud, RefreshCw, CheckCircle2, LogOut, User as UserIcon, Shield, GraduationCap, BookOpen } from 'lucide-react';
+import {
+  Database,
+  Moon,
+  Sun,
+  Cpu,
+  UploadCloud,
+  RefreshCw,
+  CheckCircle2,
+  LogOut,
+  User as UserIcon,
+  Shield,
+  GraduationCap,
+  BookOpen,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
 import { useAuth } from '@/context/AuthContext';
 import { UploadExperimentModal } from '@/components/upload/UploadExperimentModal';
@@ -62,6 +77,8 @@ export function Header() {
     isLoading,
     totalRunsCount,
     refreshData,
+    isSidebarCollapsed,
+    toggleSidebar,
   } = useDashboard();
   const { user, logout } = useAuth();
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
@@ -94,18 +111,33 @@ export function Header() {
   const RoleIcon = roleMeta.icon;
 
   return (
-    <header className="relative h-20 bg-[var(--bg-secondary)]/80 backdrop-blur-md border-b border-[var(--border-color)] px-8 flex items-center justify-between z-10 flex-shrink-0">
+    <header className="relative h-20 bg-[var(--bg-secondary)]/80 backdrop-blur-md border-b border-[var(--border-color)] px-6 md:px-8 flex items-center justify-between z-10 flex-shrink-0">
       {/* Top Animated Loading Glow Bar */}
       {isLoading && (
         <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-pulse z-50 shadow-sm" />
       )}
 
-      {/* Title Area */}
-      <div>
-        <h1 className="text-xl font-heading font-bold text-[var(--text-primary)] flex items-center gap-2">
-          {currentMeta.title}
-        </h1>
-        <p className="text-xs text-[var(--text-muted)]">{currentMeta.subtitle}</p>
+      {/* Title & Sidebar Toggle Area */}
+      <div className="flex items-center gap-3.5">
+        <button
+          onClick={toggleSidebar}
+          className="p-2 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-indigo-500/40 hover:bg-indigo-500/10 transition-all shadow-sm shrink-0"
+          title={isSidebarCollapsed ? 'Expand Sidebar' : 'Minimize Sidebar'}
+          aria-label="Toggle Sidebar"
+        >
+          {isSidebarCollapsed ? (
+            <PanelLeftOpen className="w-4 h-4 text-indigo-500" />
+          ) : (
+            <PanelLeftClose className="w-4 h-4" />
+          )}
+        </button>
+
+        <div>
+          <h1 className="text-xl font-heading font-bold text-[var(--text-primary)] flex items-center gap-2">
+            {currentMeta.title}
+          </h1>
+          <p className="text-xs text-[var(--text-muted)]">{currentMeta.subtitle}</p>
+        </div>
       </div>
 
       {/* Controls Area */}

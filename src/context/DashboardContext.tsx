@@ -50,6 +50,11 @@ interface DashboardContextType {
   theme: 'light' | 'dark';
   toggleTheme: () => void;
 
+  // Sidebar Collapse state
+  isSidebarCollapsed: boolean;
+  toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+
   // Loading state
   isLoading: boolean;
 }
@@ -61,11 +66,12 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const [selectedMetric, setSelectedMetric] = useState<string>('ARI');
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [dbRuns, setDbRuns] = useState<any[]>([]);
   const [dbModels, setDbModels] = useState<ModelMetadata[]>([]);
 
-  // Load saved theme preference on initial client mount
+  // Load saved theme and sidebar preferences on initial mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('dashboard_theme') as 'light' | 'dark' | null;
@@ -74,6 +80,28 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       } else {
         setTheme('light');
       }
+
+      const savedSidebar = localStorage.getItem('dashboard_sidebar_collapsed');
+      if (savedSidebar === 'true') {
+        setIsSidebarCollapsed(true);
+      }
+    }
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dashboard_sidebar_collapsed', String(next));
+      }
+      return next;
+    });
+  }, []);
+
+  const setSidebarCollapsed = useCallback((collapsed: boolean) => {
+    setIsSidebarCollapsed(collapsed);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('dashboard_sidebar_collapsed', String(collapsed));
     }
   }, []);
 
@@ -258,6 +286,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     equalizeMetricWeights,
     theme,
     toggleTheme,
+    isSidebarCollapsed,
+    toggleSidebar,
+    setSidebarCollapsed,
     isLoading,
   };
 
