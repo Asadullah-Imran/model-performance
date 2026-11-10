@@ -141,22 +141,26 @@ export function OverallMatrixTable({
     <div className="rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[var(--border-color)]/70 pb-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500">
               <Table className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-heading font-bold text-[var(--text-primary)]">
-              Cross-Dataset Performance Matrix ({selectedMetric})
+            <h3 className="text-base font-heading font-bold text-[var(--text-primary)] flex items-center gap-2 flex-wrap">
+              <span>Cross-Dataset Performance Matrix</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-xs font-bold tracking-wide shadow-sm shadow-indigo-500/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-pulse"></span>
+                {selectedMetric}
+              </span>
             </h3>
           </div>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+          <p className="text-xs text-[var(--text-muted)] mt-1">
             Full score breakdown with automatic highlight of the best performing model per dataset
           </p>
         </div>
 
         <button
           onClick={handleExportCSV}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-color)] hover:border-indigo-500/40 text-xs font-semibold text-[var(--text-primary)] transition-colors shadow-sm"
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-color)] hover:border-indigo-500/40 text-xs font-semibold text-[var(--text-primary)] transition-colors shadow-sm self-start sm:self-auto"
         >
           <Download className="w-3.5 h-3.5 text-indigo-500" />
           <span>Export CSV</span>

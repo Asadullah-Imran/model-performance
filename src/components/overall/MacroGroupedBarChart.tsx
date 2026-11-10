@@ -145,12 +145,16 @@ export function MacroGroupedBarChart({
     <div className="rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6 border-b border-[var(--border-color)]/70 pb-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500">
               <BarChart2 className="w-4 h-4" />
             </div>
-            <h3 className="text-base font-heading font-bold text-[var(--text-primary)]">
-              Cross-Dataset Comparative Overview ({selectedMetric})
+            <h3 className="text-base font-heading font-bold text-[var(--text-primary)] flex items-center gap-2 flex-wrap">
+              <span>Cross-Dataset Comparative Overview</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-indigo-500/15 via-purple-500/15 to-pink-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 text-xs font-bold tracking-wide shadow-sm shadow-indigo-500/10">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-pulse"></span>
+                {selectedMetric}
+              </span>
             </h3>
           </div>
           <p className="text-xs text-[var(--text-muted)] mt-1">
