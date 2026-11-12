@@ -10,9 +10,7 @@ import {
   EyeOff,
   Sparkles,
   ShieldCheck,
-  GraduationCap,
   BookOpen,
-  KeyRound,
   ArrowRight,
   Database,
   CheckCircle2,
@@ -29,7 +27,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'student' | 'faculty' | 'admin'>('student');
+  const [activeTab, setActiveTab] = useState<'student' | 'admin'>('student');
 
   useEffect(() => {
     if (user) {
@@ -37,7 +35,7 @@ export default function LoginPage() {
     }
   }, [user, router]);
 
-  const handleQuickFill = (role: 'student' | 'faculty' | 'admin') => {
+  const handleQuickFill = (role: 'student' | 'admin') => {
     setActiveTab(role);
     setError('');
     setUsername(role);
@@ -96,7 +94,7 @@ export default function LoginPage() {
             <span>Select Master Role</span>
             <span className="text-[10px] text-indigo-400 font-normal">Select Username</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => handleQuickFill('student')}
@@ -108,19 +106,6 @@ export default function LoginPage() {
             >
               <BookOpen className="w-4 h-4 mb-1 text-indigo-400" />
               <span>Student</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill('faculty')}
-              className={`flex flex-col items-center justify-center p-2.5 rounded-xl border text-xs font-medium transition-all ${
-                activeTab === 'faculty'
-                  ? 'bg-emerald-500/20 border-emerald-500/60 text-emerald-300 shadow-sm shadow-emerald-500/10'
-                  : 'bg-slate-800/50 border-slate-700/60 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4 mb-1 text-emerald-400" />
-              <span>Faculty</span>
             </button>
 
             <button
@@ -160,7 +145,7 @@ export default function LoginPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="student / faculty / admin"
+                placeholder="student / admin"
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-950/60 border border-slate-700/80 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all font-sans"
                 required
               />
