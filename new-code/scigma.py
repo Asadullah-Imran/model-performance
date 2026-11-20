@@ -41,11 +41,13 @@ from sklearn.metrics import (
     davies_bouldin_score,
     homogeneity_score,
     normalized_mutual_info_score,
+    silhouette_samples,
     silhouette_score,
     v_measure_score,
 )
 from sklearn.neighbors import NearestNeighbors, kneighbors_graph
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from typing import Optional
 from torch.nn.modules.module import Module
 from torch.nn.parameter import Parameter
 from tqdm import tqdm
@@ -1172,6 +1174,7 @@ parser.add_argument('--dataset_indices', type=int, nargs='+', default=None, help
 parser.add_argument('--seed', type=int, default=None, help="Single seed to run (e.g. --seed 2024)")
 parser.add_argument('--seeds', type=int, nargs='+', default=None, help="List of seeds to run (e.g. --seeds 42 0 7)")
 parser.add_argument('--output_dir', type=str, default=None, help="Custom output directory")
+parser.add_argument('--api_url', type=str, default="https://model-performance.vercel.app/api/experiments/upload", help="Dashboard API URL for uploading experiment runs")
 
 args, unknown = parser.parse_known_args()
 device = torch.device(args.device)
@@ -1217,6 +1220,162 @@ RESULTS_DIR = os.path.join(OUTPUT_DIR, "results")
 VISUALS_DIR = os.path.join(OUTPUT_DIR, "visuals")
 os.makedirs(RESULTS_DIR, exist_ok=True)
 os.makedirs(VISUALS_DIR, exist_ok=True)
+
+def compute_chaos(spatial_coords, labels):
+    """Spatial CHAOS score (Shang & Zhou, Nature Communications 2022). Lower is better."""
+    coords = np.asarray(spatial_coords, dtype=np.float64)
+    labels = np.asarray(labels)
+    n_spots = len(labels)
+    if n_spots <= 1:
+        return 0.0
+    coords_norm = StandardScaler().fit_transform(coords)
+    total_dist = 0.0
+    for cl in np.unique(labels):
+        idx = np.where(labels == cl)[0]
+        if len(idx) <= 1:
+            continue
+        sub_coords = coords_norm[idx]
+        nbrs = NearestNeighbors(n_neighbors=2, metric='euclidean').fit(sub_coords)
+        dists, _ = nbrs.kneighbors(sub_coords)
+        total_dist += float(np.sum(dists[:, 1]))
+    return float(total_dist / n_spots)
+
+
+def compute_pas(spatial_coords, labels, k=10):
+    """Percentage of Abnormal Spots (Shang & Zhou, Nature Communications 2022). Lower is better."""
+    coords = np.asarray(spatial_coords, dtype=np.float64)
+    labels = np.asarray(labels)
+    n_spots = len(labels)
+    k_eff = min(k, n_spots - 1)
+    if k_eff <= 0:
+        return 0.0
+    nbrs = NearestNeighbors(n_neighbors=k_eff + 1, metric='euclidean').fit(coords)
+    _, indices = nbrs.kneighbors(coords)
+    neighbor_labels = labels[indices[:, 1:]]
+    diff_frac = np.mean(neighbor_labels != labels[:, None], axis=1)
+    return float(np.mean(diff_frac > 0.5))
+
+
+def compute_morans_i(spatial_coords, labels, k=10):
+    """Permutation-invariant mean Moran's I across one-hot domain indicators. Higher is better."""
+    coords = np.asarray(spatial_coords, dtype=np.float64)
+    labels = np.asarray(labels)
+    n_spots = len(labels)
+    k_eff = min(k, n_spots - 1)
+    if k_eff <= 0:
+        return 0.0
+    W = kneighbors_graph(coords, n_neighbors=k_eff, mode='connectivity', include_self=False)
+    W = W.maximum(W.T).tocsr()
+    W_sum = float(W.sum())
+    if W_sum <= 0.0:
+        return 0.0
+    moran_vals = []
+    for cl in np.unique(labels):
+        y = (labels == cl).astype(np.float64)
+        y_c = y - y.mean()
+        denom = float(np.dot(y_c, y_c))
+        if denom <= 1e-12:
+            continue
+        num = float(y_c @ (W @ y_c))
+        moran_vals.append((n_spots / W_sum) * (num / denom))
+    return float(np.mean(moran_vals)) if len(moran_vals) > 0 else 0.0
+
+
+def make_json_serializable(obj):
+    if isinstance(obj, np.ndarray):
+        return [make_json_serializable(x) for x in obj.tolist()]
+    if isinstance(obj, (np.floating, np.float32, np.float64, np.float16)):
+        val = float(obj)
+        return 0.0 if (np.isnan(val) or np.isinf(val)) else val
+    if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+        return int(obj)
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    if isinstance(obj, float):
+        return 0.0 if (np.isnan(obj) or np.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {str(k): make_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+    return obj
+
+
+def export_dashboard_experiment(
+    model_id: str,
+    model_name: str,
+    dataset_name: str,
+    seed: int,
+    metrics_dict: dict,
+    hyperparameters: dict,
+    duration_seconds: float,
+    best_epoch: int = 0,
+    embeddings_data: Optional[dict] = None,
+    output_dir: str = "results",
+    api_url: Optional[str] = "https://model-performance.vercel.app/api/experiments/upload",
+    architecture: str = "SCIGMA Multi-Modal Spatial Graph Network",
+):
+    """Export standardized JSON artifacts and send directly to Dashboard via API."""
+    import json
+    import urllib.request
+
+    exp_dir = os.path.join(output_dir, "experiments", model_id, dataset_name, f"seed_{seed}")
+    os.makedirs(exp_dir, exist_ok=True)
+
+    safe_metrics = make_json_serializable(metrics_dict)
+    safe_hyperparameters = make_json_serializable(hyperparameters)
+    safe_embeddings = make_json_serializable(embeddings_data or {})
+    best_score = float(safe_metrics.get("Silhouette", 0.0))
+
+    with open(os.path.join(exp_dir, "metrics.json"), "w") as f:
+        json.dump({
+            "model_id": model_id,
+            "dataset": dataset_name,
+            "seed": int(seed),
+            "best_epoch": int(best_epoch),
+            "best_score": best_score,
+            "durationSeconds": float(duration_seconds),
+            "metrics": safe_metrics,
+        }, f, indent=2)
+
+    with open(os.path.join(exp_dir, "metadata.json"), "w") as f:
+        json.dump({
+            "model_name": model_name,
+            "dataset": dataset_name,
+            "seed": int(seed),
+            "durationSeconds": float(duration_seconds),
+            "hyperparameters": safe_hyperparameters,
+        }, f, indent=2)
+
+    if api_url:
+        try:
+            payload = {
+                "modelId": model_id,
+                "modelName": model_name,
+                "datasetId": dataset_name,
+                "datasetName": dataset_name.replace("_", " ").title(),
+                "seed": int(seed),
+                "bestEpoch": int(best_epoch),
+                "bestScore": best_score,
+                "durationSeconds": float(duration_seconds),
+                "finalMetrics": safe_metrics,
+                "history": [],
+                "embeddingsData": safe_embeddings,
+                "modelMetadata": {
+                    "architecture": architecture,
+                    "hyperparameters": safe_hyperparameters,
+                },
+            }
+            req = urllib.request.Request(
+                api_url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=15) as response:
+                if response.status == 200:
+                    print(f"🚀 Sent {model_name} ({dataset_name}, seed={seed}, {duration_seconds:.2f}s) to Dashboard API!")
+        except Exception as e:
+            print(f"ℹ️ Direct API push skipped ({e}). Data saved locally in {exp_dir}.")
+
 
 all_results = []
 all_dataset_adata = {}
@@ -1422,8 +1581,21 @@ for dataset_idx in DATASET_INDICES:
         except Exception:
             dbi_score = float('nan')
 
+        # Spatial Coherence Metrics: Moran's I (↑), PAS (↓), CHAOS (↓)
+        y_pred_all = adata.obs['SCIGMA'].astype(str).values
+        try:
+            sc_coords = adata.obsm['spatial']
+            morans_i = compute_morans_i(sc_coords, y_pred_all, k=10)
+            pas_score = compute_pas(sc_coords, y_pred_all, k=10)
+            chaos_score = compute_chaos(sc_coords, y_pred_all)
+        except Exception:
+            morans_i = float('nan')
+            pas_score = float('nan')
+            chaos_score = float('nan')
+
         print(f"\nResult for dataset: {dataset_name} | seed: {seed_val}")
-        print(f"ARI: {ari:.4f} | NMI: {nmi:.4f} | Silhouette: {sil_score:.4f} | CHI: {chi_score:.2f} | DBI: {dbi_score:.4f} | Duration: {duration_sec:.2f}s")
+        print(f"ARI: {ari:.4f} | NMI: {nmi:.4f} | AMI: {ami:.4f} | Silhouette: {sil_score:.4f} | DBI: {dbi_score:.4f}")
+        print(f"Moran's I: {morans_i:.4f} | PAS: {pas_score:.4f} | CHAOS: {chaos_score:.4f} | CHI: {chi_score:.2f} | Duration: {duration_sec:.2f}s")
 
         res_dict = {
             'dataset': dataset_name,
@@ -1436,6 +1608,9 @@ for dataset_idx in DATASET_INDICES:
             'Silhouette': sil_score,
             'CHI': chi_score,
             'DBI': dbi_score,
+            'Morans_I': morans_i,
+            'PAS': pas_score,
+            'CHAOS': chaos_score,
             'Duration': duration_sec,
         }
         dataset_results.append(res_dict)
@@ -1466,6 +1641,53 @@ for dataset_idx in DATASET_INDICES:
         plt.savefig(plot_filename, dpi=150)
         plt.savefig(f"results/{MODEL_NAME}_{dataset_name}_seed_{seed_val}.png", dpi=150)
         plt.close()
+
+        # ------------------ Export to Database / Dashboard ------------------
+        try:
+            sample_sils = silhouette_samples(joint_feat, y_pred_int).tolist()
+        except Exception:
+            sample_sils = []
+
+        umap_coords = adata.obsm.get('X_umap', None)
+        spatial_coords = adata.obsm.get('spatial', None)
+        embeddings_data = {
+            "umapCoordinates": umap_coords.tolist() if umap_coords is not None else [],
+            "spatialCoordinates": spatial_coords.tolist() if spatial_coords is not None else [],
+            "predictedLabels": y_pred_all.tolist(),
+            "groundTruthLabels": adata.obs['ground_truth'].astype(str).tolist(),
+            "sampleSilhouettes": sample_sils,
+        }
+        metrics_payload = {
+            "ARI": float(ari),
+            "NMI": float(nmi),
+            "AMI": float(ami),
+            "Homogeneity": float(homogeneity),
+            "V-measure": float(v_measure),
+            "Silhouette": float(sil_score),
+            "CHI": float(chi_score),
+            "DBI": float(dbi_score),
+            "Morans_I": float(morans_i),
+            "PAS": float(pas_score),
+            "CHAOS": float(chaos_score),
+        }
+        hp_payload = {
+            "architecture": args.architecture,
+            "clustering_tool": args.tool,
+        }
+        export_dashboard_experiment(
+            model_id="SCIGMA",
+            model_name=MODEL_NAME,
+            dataset_name=dataset_name,
+            seed=seed_val,
+            metrics_dict=metrics_payload,
+            hyperparameters=hp_payload,
+            duration_seconds=duration_sec,
+            best_epoch=0,
+            embeddings_data=embeddings_data,
+            output_dir=RESULTS_DIR,
+            api_url=args.api_url,
+            architecture=f"SCIGMA ({args.architecture}) Multi-Modal Spatial Graph Network",
+        )
 
     # Save best-ARI seed AnnData for cross-dataset visualizations
     if best_adata is not None:
