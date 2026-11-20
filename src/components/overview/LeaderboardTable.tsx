@@ -42,8 +42,8 @@ export function LeaderboardTable() {
           metricRanks[m.key] = r;
         });
 
-        // Compute average rank across core clustering metrics (ARI, Sil, NMI, AMI, Homo, V-meas)
-        const coreMetrics = ['ARI', 'Silhouette', 'NMI', 'AMI', 'Homogeneity', 'V-measure'];
+        // Compute average rank across the 8 main evaluation metrics
+        const coreMetrics = ['ARI', 'NMI', 'AMI', 'Silhouette', 'DBI', 'Morans_I', 'PAS', 'CHAOS'];
         const avgRank = coreMetrics.reduce((sum, k) => sum + (metricRanks[k] || 1), 0) / coreMetrics.length;
 
         return {

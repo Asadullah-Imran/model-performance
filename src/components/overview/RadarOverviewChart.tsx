@@ -18,8 +18,8 @@ ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, 
 export function RadarOverviewChart() {
   const { models, resultsByModel, metrics, theme } = useDashboard();
 
-  // Radar metrics to display
-  const radarMetrics = metrics.filter(m => m.key !== 'CHI' && m.key !== 'DBI');
+  // Radar metrics to display (bounded higher-is-better metrics including Moran's I)
+  const radarMetrics = metrics.filter(m => m.key !== 'CHI' && m.direction === 'higher_is_better');
 
   const isDark = theme === 'dark';
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)';

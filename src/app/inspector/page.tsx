@@ -19,7 +19,7 @@ import {
 import { useDashboard } from '@/context/DashboardContext';
 import { formatDuration } from '@/lib/statistics';
 
-type SortColumn = 'modelName' | 'datasetName' | 'seed' | 'ARI' | 'NMI' | 'AMI' | 'Homogeneity' | 'V-measure' | 'Silhouette' | 'durationSeconds';
+type SortColumn = 'modelName' | 'datasetName' | 'seed' | 'ARI' | 'NMI' | 'AMI' | 'Silhouette' | 'DBI' | 'Morans_I' | 'PAS' | 'CHAOS' | 'durationSeconds';
 
 export default function InspectorPage() {
   const { rawRecords, models, datasets } = useDashboard();
@@ -224,7 +224,7 @@ export default function InspectorPage() {
   };
 
   const exportCSV = () => {
-    const headers = ['Model', 'Dataset', 'Seed', 'Best Epoch', 'Duration (s)', 'ARI', 'NMI', 'AMI', 'Homogeneity', 'V-measure', 'Silhouette', 'CHI', 'DBI'];
+    const headers = ['Model', 'Dataset', 'Seed', 'Best Epoch', 'Duration (s)', 'ARI', 'NMI', 'AMI', 'Silhouette', 'DBI', 'Morans_I', 'PAS', 'CHAOS', 'Homogeneity', 'V-measure', 'CHI'];
     const csvContent = [
       headers.join(','),
       ...filteredRecords.map(r =>
@@ -237,11 +237,14 @@ export default function InspectorPage() {
           r.metrics['ARI'] ?? '',
           r.metrics['NMI'] ?? '',
           r.metrics['AMI'] ?? '',
+          r.metrics['Silhouette'] ?? '',
+          r.metrics['DBI'] ?? '',
+          r.metrics['Morans_I'] ?? '',
+          r.metrics['PAS'] ?? '',
+          r.metrics['CHAOS'] ?? '',
           r.metrics['Homogeneity'] ?? '',
           r.metrics['V-measure'] ?? '',
-          r.metrics['Silhouette'] ?? '',
           r.metrics['CHI'] ?? '',
-          r.metrics['DBI'] ?? '',
         ].join(',')
       ),
     ].join('\n');
@@ -560,14 +563,20 @@ export default function InspectorPage() {
                 <th onClick={() => handleSort('AMI')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
                   <div className="flex items-center gap-1">AMI <ChevronsUpDown className="w-3 h-3" /></div>
                 </th>
-                <th onClick={() => handleSort('Homogeneity')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
-                  <div className="flex items-center gap-1">Homogeneity <ChevronsUpDown className="w-3 h-3" /></div>
-                </th>
-                <th onClick={() => handleSort('V-measure')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
-                  <div className="flex items-center gap-1">V-Measure <ChevronsUpDown className="w-3 h-3" /></div>
-                </th>
                 <th onClick={() => handleSort('Silhouette')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
                   <div className="flex items-center gap-1">Silhouette <ChevronsUpDown className="w-3 h-3" /></div>
+                </th>
+                <th onClick={() => handleSort('DBI')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
+                  <div className="flex items-center gap-1">DBI <ChevronsUpDown className="w-3 h-3" /></div>
+                </th>
+                <th onClick={() => handleSort('Morans_I')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
+                  <div className="flex items-center gap-1">Moran&apos;s I <ChevronsUpDown className="w-3 h-3" /></div>
+                </th>
+                <th onClick={() => handleSort('PAS')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
+                  <div className="flex items-center gap-1">PAS <ChevronsUpDown className="w-3 h-3" /></div>
+                </th>
+                <th onClick={() => handleSort('CHAOS')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
+                  <div className="flex items-center gap-1">CHAOS <ChevronsUpDown className="w-3 h-3" /></div>
                 </th>
                 <th onClick={() => handleSort('durationSeconds')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
                   <div className="flex items-center gap-1">Duration <ChevronsUpDown className="w-3 h-3" /></div>
@@ -577,7 +586,7 @@ export default function InspectorPage() {
             <tbody className="divide-y divide-[var(--border-color)]">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-10 text-center text-[var(--text-muted)]">
+                  <td colSpan={12} className="py-10 text-center text-[var(--text-muted)]">
                     No evaluation records match the current filter selection.
                   </td>
                 </tr>
@@ -587,12 +596,14 @@ export default function InspectorPage() {
                     <td className="py-2.5 font-bold text-[var(--text-primary)]">{r.modelName}</td>
                     <td className="py-2.5 text-[var(--text-secondary)]">{r.datasetName}</td>
                     <td className="py-2.5 font-mono text-[var(--text-muted)]">{r.seed}</td>
-                    <td className="py-2.5 font-mono font-semibold text-indigo-400">{r.metrics['ARI']?.toFixed(4)}</td>
-                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['NMI']?.toFixed(4)}</td>
-                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['AMI']?.toFixed(4)}</td>
-                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['Homogeneity']?.toFixed(4)}</td>
-                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['V-measure']?.toFixed(4)}</td>
-                    <td className="py-2.5 font-mono font-semibold text-emerald-400">{r.metrics['Silhouette']?.toFixed(4)}</td>
+                    <td className="py-2.5 font-mono font-semibold text-indigo-400">{r.metrics['ARI']?.toFixed(4) ?? '-'}</td>
+                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['NMI']?.toFixed(4) ?? '-'}</td>
+                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['AMI']?.toFixed(4) ?? '-'}</td>
+                    <td className="py-2.5 font-mono font-semibold text-emerald-400">{r.metrics['Silhouette']?.toFixed(4) ?? '-'}</td>
+                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['DBI']?.toFixed(4) ?? '-'}</td>
+                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['Morans_I']?.toFixed(4) ?? '-'}</td>
+                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['PAS']?.toFixed(4) ?? '-'}</td>
+                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['CHAOS']?.toFixed(4) ?? '-'}</td>
                     <td className="py-2.5 font-mono text-[var(--text-secondary)]">{formatDuration(r.durationSeconds)}</td>
                   </tr>
                 ))

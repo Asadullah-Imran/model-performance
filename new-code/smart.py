@@ -1298,9 +1298,70 @@ from sklearn.metrics import (
     calinski_harabasz_score,
     davies_bouldin_score
 )
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.decomposition import PCA
+from sklearn.neighbors import NearestNeighbors, kneighbors_graph
 from typing import Optional
+
+
+def compute_chaos(spatial_coords, labels):
+    """Spatial CHAOS score (Shang & Zhou, Nature Communications 2022). Lower is better."""
+    coords = np.asarray(spatial_coords, dtype=np.float64)
+    labels = np.asarray(labels)
+    n_spots = len(labels)
+    if n_spots <= 1:
+        return 0.0
+    coords_norm = StandardScaler().fit_transform(coords)
+    total_dist = 0.0
+    for cl in np.unique(labels):
+        idx = np.where(labels == cl)[0]
+        if len(idx) <= 1:
+            continue
+        sub_coords = coords_norm[idx]
+        nbrs = NearestNeighbors(n_neighbors=2, metric='euclidean').fit(sub_coords)
+        dists, _ = nbrs.kneighbors(sub_coords)
+        total_dist += float(np.sum(dists[:, 1]))
+    return float(total_dist / n_spots)
+
+
+def compute_pas(spatial_coords, labels, k=10):
+    """Percentage of Abnormal Spots (Shang & Zhou, Nature Communications 2022). Lower is better."""
+    coords = np.asarray(spatial_coords, dtype=np.float64)
+    labels = np.asarray(labels)
+    n_spots = len(labels)
+    k_eff = min(k, n_spots - 1)
+    if k_eff <= 0:
+        return 0.0
+    nbrs = NearestNeighbors(n_neighbors=k_eff + 1, metric='euclidean').fit(coords)
+    _, indices = nbrs.kneighbors(coords)
+    neighbor_labels = labels[indices[:, 1:]]
+    diff_frac = np.mean(neighbor_labels != labels[:, None], axis=1)
+    return float(np.mean(diff_frac > 0.5))
+
+
+def compute_morans_i(spatial_coords, labels, k=10):
+    """Permutation-invariant mean Moran's I across one-hot domain indicators. Higher is better."""
+    coords = np.asarray(spatial_coords, dtype=np.float64)
+    labels = np.asarray(labels)
+    n_spots = len(labels)
+    k_eff = min(k, n_spots - 1)
+    if k_eff <= 0:
+        return 0.0
+    W = kneighbors_graph(coords, n_neighbors=k_eff, mode='connectivity', include_self=False)
+    W = W.maximum(W.T).tocsr()
+    W_sum = float(W.sum())
+    if W_sum <= 0.0:
+        return 0.0
+    moran_vals = []
+    for cl in np.unique(labels):
+        y = (labels == cl).astype(np.float64)
+        y_c = y - y.mean()
+        denom = float(np.dot(y_c, y_c))
+        if denom <= 1e-12:
+            continue
+        num = float(y_c @ (W @ y_c))
+        moran_vals.append((n_spots / W_sum) * (num / denom))
+    return float(np.mean(moran_vals)) if len(moran_vals) > 0 else 0.0
 
 
 def make_json_serializable(obj):
@@ -1585,8 +1646,20 @@ for dataset_idx in DATASET_INDICES:
         except Exception:
             dbi_score = float('nan')
 
+        # Spatial Coherence Metrics: Moran's I (↑), PAS (↓), CHAOS (↓)
+        try:
+            sc_coords = adata.obsm['spatial']
+            morans_i = compute_morans_i(sc_coords, y_pred, k=10)
+            pas_score = compute_pas(sc_coords, y_pred, k=10)
+            chaos_score = compute_chaos(sc_coords, y_pred)
+        except Exception:
+            morans_i = float('nan')
+            pas_score = float('nan')
+            chaos_score = float('nan')
+
         print(f"\nResult for dataset: {dataset_name} | seed: {seed}")
-        print(f"ARI: {ari:.4f} | NMI: {nmi:.4f} | Silhouette: {sil_score:.4f} | CHI: {chi_score:.2f} | DBI: {dbi_score:.4f} | Duration: {duration_sec:.2f}s")
+        print(f"ARI: {ari:.4f} | NMI: {nmi:.4f} | AMI: {ami:.4f} | Silhouette: {sil_score:.4f} | DBI: {dbi_score:.4f}")
+        print(f"Moran's I: {morans_i:.4f} | PAS: {pas_score:.4f} | CHAOS: {chaos_score:.4f} | CHI: {chi_score:.2f} | Duration: {duration_sec:.2f}s")
 
         # Store seed results
         res_dict = {
@@ -1600,6 +1673,9 @@ for dataset_idx in DATASET_INDICES:
             'Silhouette': sil_score,
             'CHI': chi_score,
             'DBI': dbi_score,
+            'Morans_I': morans_i,
+            'PAS': pas_score,
+            'CHAOS': chaos_score,
             'Duration': duration_sec
         }
         dataset_results.append(res_dict)
@@ -1657,6 +1733,9 @@ for dataset_idx in DATASET_INDICES:
             "Silhouette": float(sil_score),
             "CHI": float(chi_score),
             "DBI": float(dbi_score),
+            "Morans_I": float(morans_i),
+            "PAS": float(pas_score),
+            "CHAOS": float(chaos_score),
         }
         hp_payload = {
             "epochs": 300,

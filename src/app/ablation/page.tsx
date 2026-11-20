@@ -37,9 +37,12 @@ export default function AblationPage() {
           let normalized = meanVal;
           if (m.key === 'CHI') {
             normalized = Math.min(1.0, meanVal / 2000);
-          } else if (m.key === 'DBI') {
+          } else if (m.key === 'DBI' || m.key === 'CHAOS') {
             // Lower is better: invert
             normalized = Math.max(0, 1.0 - meanVal / 2.0);
+          } else if (m.key === 'PAS') {
+            // Lower is better in [0, 1]: invert
+            normalized = Math.max(0, 1.0 - Math.min(1.0, meanVal));
           } else {
             normalized = Math.max(0, Math.min(1, meanVal));
           }
