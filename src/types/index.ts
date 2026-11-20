@@ -102,6 +102,14 @@ export interface ModelDatasetResults {
     range: number;
     values: number[];
   }>;
+  durationStats?: {
+    mean: number;
+    stdDev: number;
+    min: number;
+    max: number;
+    total: number;
+    count: number;
+  };
 }
 
 export interface RawEvaluationRecord {
@@ -112,4 +120,5 @@ export interface RawEvaluationRecord {
   seed: number;
   metrics: Record<string, number>;
   bestEpoch?: number;
+  durationSeconds?: number;
 }

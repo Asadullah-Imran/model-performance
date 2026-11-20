@@ -112,6 +112,9 @@ export function aggregateExperimentRuns(
       seed: run.seed,
       metrics: run.finalMetrics || {},
       bestEpoch: run.bestEpoch,
+      durationSeconds: typeof run.durationSeconds === 'number' && !isNaN(run.durationSeconds)
+        ? run.durationSeconds
+        : undefined,
     });
   });
 
@@ -173,11 +176,27 @@ export function aggregateExperimentRuns(
       };
     });
 
+    const durationValues = modelRuns
+      .map(r => r.durationSeconds)
+      .filter((v): v is number => typeof v === 'number' && !isNaN(v) && v >= 0);
+
+    const durationStats = durationValues.length > 0
+      ? {
+          mean: Number(calculateMean(durationValues).toFixed(2)),
+          stdDev: Number(calculateStdDev(durationValues).toFixed(2)),
+          min: Number(Math.min(...durationValues).toFixed(2)),
+          max: Number(Math.max(...durationValues).toFixed(2)),
+          total: Number(durationValues.reduce((sum, v) => sum + v, 0).toFixed(2)),
+          count: durationValues.length,
+        }
+      : undefined;
+
     resultsByModel[modelId] = {
       modelId,
       datasetId: selectedDatasetId,
       seeds: seedsData,
       aggregatedMetrics,
+      durationStats,
     };
   });
 

@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { ShieldCheck, Download, Filter } from 'lucide-react';
+import { ShieldCheck, Download, Filter, Clock } from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
+import { formatDuration } from '@/lib/statistics';
 
 export default function StabilityPage() {
   const { models, resultsByModel, metrics } = useDashboard();
@@ -182,6 +183,69 @@ export default function StabilityPage() {
                   </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Execution Runtime Across Seeds */}
+      <div className="rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border-color)] p-6 shadow-sm flex flex-col">
+        <div className="mb-4">
+          <h2 className="text-base font-heading font-bold text-[var(--text-primary)] flex items-center gap-2">
+            <Clock className="w-4 h-4 text-indigo-400" />
+            Execution Runtime Across Seeds
+          </h2>
+          <p className="text-xs text-[var(--text-muted)]">
+            Training and clustering wall-clock duration per seed run stored in MongoDB
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-[var(--border-color)] text-[var(--text-muted)] uppercase font-semibold">
+                <th className="pb-3">Model</th>
+                <th className="pb-3">Timed Runs</th>
+                <th className="pb-3">Mean Duration</th>
+                <th className="pb-3">Std Dev (σ)</th>
+                <th className="pb-3">Fastest Seed</th>
+                <th className="pb-3">Slowest Seed</th>
+                <th className="pb-3">Total Time</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[var(--border-color)]">
+              {(selectedModel === 'all' ? models : models.filter(m => m.id === selectedModel)).map(model => {
+                const dStats = resultsByModel[model.id]?.durationStats;
+                return (
+                  <tr key={model.id} className="hover:bg-[var(--bg-tertiary)]/30 transition-colors">
+                    <td className="py-2.5 font-bold text-[var(--text-primary)] flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: model.colorTheme.baseColor }}
+                      />
+                      {model.name}
+                    </td>
+                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">
+                      {dStats ? dStats.count : 0}
+                    </td>
+                    <td className="py-2.5 font-mono font-bold text-indigo-400">
+                      {dStats ? formatDuration(dStats.mean) : '-'}
+                    </td>
+                    <td className="py-2.5 font-mono text-[var(--text-muted)]">
+                      {dStats ? `±${dStats.stdDev.toFixed(2)}s` : '-'}
+                    </td>
+                    <td className="py-2.5 font-mono text-emerald-500">
+                      {dStats ? formatDuration(dStats.min) : '-'}
+                    </td>
+                    <td className="py-2.5 font-mono text-amber-500">
+                      {dStats ? formatDuration(dStats.max) : '-'}
+                    </td>
+                    <td className="py-2.5 font-mono font-semibold text-[var(--text-primary)]">
+                      {dStats ? formatDuration(dStats.total) : '-'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

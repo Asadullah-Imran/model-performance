@@ -17,8 +17,9 @@ import {
   Square,
 } from 'lucide-react';
 import { useDashboard } from '@/context/DashboardContext';
+import { formatDuration } from '@/lib/statistics';
 
-type SortColumn = 'modelName' | 'datasetName' | 'seed' | 'ARI' | 'NMI' | 'AMI' | 'Homogeneity' | 'V-measure' | 'Silhouette';
+type SortColumn = 'modelName' | 'datasetName' | 'seed' | 'ARI' | 'NMI' | 'AMI' | 'Homogeneity' | 'V-measure' | 'Silhouette' | 'durationSeconds';
 
 export default function InspectorPage() {
   const { rawRecords, models, datasets } = useDashboard();
@@ -201,6 +202,9 @@ export default function InspectorPage() {
         } else if (sortCol === 'seed') {
           valA = a.seed;
           valB = b.seed;
+        } else if (sortCol === 'durationSeconds') {
+          valA = a.durationSeconds ?? -1;
+          valB = b.durationSeconds ?? -1;
         } else {
           valA = a.metrics[sortCol] ?? 0;
           valB = b.metrics[sortCol] ?? 0;
@@ -220,7 +224,7 @@ export default function InspectorPage() {
   };
 
   const exportCSV = () => {
-    const headers = ['Model', 'Dataset', 'Seed', 'Best Epoch', 'ARI', 'NMI', 'AMI', 'Homogeneity', 'V-measure', 'Silhouette', 'CHI', 'DBI'];
+    const headers = ['Model', 'Dataset', 'Seed', 'Best Epoch', 'Duration (s)', 'ARI', 'NMI', 'AMI', 'Homogeneity', 'V-measure', 'Silhouette', 'CHI', 'DBI'];
     const csvContent = [
       headers.join(','),
       ...filteredRecords.map(r =>
@@ -229,6 +233,7 @@ export default function InspectorPage() {
           `"${r.datasetName}"`,
           r.seed,
           r.bestEpoch || 0,
+          r.durationSeconds !== undefined ? r.durationSeconds.toFixed(2) : '',
           r.metrics['ARI'] ?? '',
           r.metrics['NMI'] ?? '',
           r.metrics['AMI'] ?? '',
@@ -564,12 +569,15 @@ export default function InspectorPage() {
                 <th onClick={() => handleSort('Silhouette')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
                   <div className="flex items-center gap-1">Silhouette <ChevronsUpDown className="w-3 h-3" /></div>
                 </th>
+                <th onClick={() => handleSort('durationSeconds')} className="pb-3 cursor-pointer hover:text-[var(--text-primary)]">
+                  <div className="flex items-center gap-1">Duration <ChevronsUpDown className="w-3 h-3" /></div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--border-color)]">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-[var(--text-muted)]">
+                  <td colSpan={10} className="py-10 text-center text-[var(--text-muted)]">
                     No evaluation records match the current filter selection.
                   </td>
                 </tr>
@@ -585,6 +593,7 @@ export default function InspectorPage() {
                     <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['Homogeneity']?.toFixed(4)}</td>
                     <td className="py-2.5 font-mono text-[var(--text-secondary)]">{r.metrics['V-measure']?.toFixed(4)}</td>
                     <td className="py-2.5 font-mono font-semibold text-emerald-400">{r.metrics['Silhouette']?.toFixed(4)}</td>
+                    <td className="py-2.5 font-mono text-[var(--text-secondary)]">{formatDuration(r.durationSeconds)}</td>
                   </tr>
                 ))
               )}

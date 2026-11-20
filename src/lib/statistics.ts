@@ -152,3 +152,23 @@ export function calculateCorrelationMatrix(
 
   return matrix;
 }
+
+/**
+ * Formats a duration in seconds into a concise human-readable string (e.g. "14.25s", "2m 15s").
+ */
+export function formatDuration(seconds?: number): string {
+  if (seconds === undefined || seconds === null || isNaN(seconds) || seconds < 0) {
+    return '-';
+  }
+  if (seconds < 60) {
+    return `${seconds.toFixed(2)}s`;
+  }
+  const mins = Math.floor(seconds / 60);
+  const remSecs = seconds % 60;
+  if (mins < 60) {
+    return `${mins}m ${remSecs.toFixed(1)}s`;
+  }
+  const hours = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return `${hours}h ${remMins}m`;
+}

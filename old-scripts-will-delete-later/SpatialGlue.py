@@ -1016,6 +1016,7 @@ def export_dashboard_experiment(
 
     best_epoch = int(training_results.get("best_epoch", len(loss_hist)))
     best_score = float(training_results.get("best_sil", metrics_dict.get("Silhouette", 0.0)))
+    duration = float(duration_seconds if duration_seconds is not None else training_results.get("duration_seconds", 0.0))
 
     # 2. Local JSON Files Save
     with open(os.path.join(exp_dir, "metrics.json"), "w") as f:
@@ -1026,6 +1027,7 @@ def export_dashboard_experiment(
             "final_epoch": len(loss_hist),
             "best_epoch": best_epoch,
             "best_score": best_score,
+            "durationSeconds": duration,
             "metrics": safe_metrics
         }, f, indent=2)
 
@@ -1053,6 +1055,7 @@ def export_dashboard_experiment(
                 "seed": int(seed),
                 "bestEpoch": best_epoch,
                 "bestScore": best_score,
+                "durationSeconds": duration,
                 "finalMetrics": safe_metrics,
                 "history": safe_history,
                 "embeddingsData": safe_embeddings,
@@ -1365,7 +1368,8 @@ def run_experiment(
                 hyperparameters=hyperparameters,
                 embeddings_data=embeddings_data,
                 output_dir=output_dir,
-                api_url=api_url
+                api_url=api_url,
+                duration_seconds=duration,
             )
 
             res_dict = {

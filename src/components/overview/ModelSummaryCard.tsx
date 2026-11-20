@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { Activity, Sparkles, Zap } from 'lucide-react';
+import { Activity, Clock } from 'lucide-react';
 import { ModelMetadata, ModelDatasetResults } from '@/types';
+import { formatDuration } from '@/lib/statistics';
 
 interface Props {
   model: ModelMetadata;
@@ -87,15 +88,28 @@ export function ModelSummaryCard({ model, results, rank }: Props) {
         </div>
       </div>
 
-      {/* Card Footer: Stability & Seed Variance */}
-      <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)] mt-1">
-        <span className="flex items-center gap-1.5 font-medium">
-          <Activity className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-          Stability (CV%):
-        </span>
-        <span className="font-mono font-semibold text-[var(--text-secondary)]">
-          {ariStats ? `${ariStats.cv.toFixed(2)}%` : '-'}
-        </span>
+      {/* Card Footer: Stability & Avg Runtime */}
+      <div className="space-y-1.5 mt-1">
+        <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+          <span className="flex items-center gap-1.5 font-medium">
+            <Activity className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            Stability (CV%):
+          </span>
+          <span className="font-mono font-semibold text-[var(--text-secondary)]">
+            {ariStats ? `${ariStats.cv.toFixed(2)}%` : '-'}
+          </span>
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+          <span className="flex items-center gap-1.5 font-medium">
+            <Clock className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" />
+            Avg Runtime / Seed:
+          </span>
+          <span className="font-mono font-semibold text-[var(--text-secondary)]">
+            {results?.durationStats
+              ? `${formatDuration(results.durationStats.mean)}${results.durationStats.count > 1 ? ` (±${results.durationStats.stdDev.toFixed(1)}s)` : ''}`
+              : '-'}
+          </span>
+        </div>
       </div>
     </div>
   );

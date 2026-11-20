@@ -1,0 +1,1511 @@
+
+# ------------------------ Load Packages ---------------------------------------
+import numpy as np
+import scanpy as sc
+import scipy
+import sklearn
+import anndata
+from typing import Optional
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.neighbors import NearestNeighbors, kneighbors_graph
+from scipy.spatial.distance import cdist
+import torch
+from torch_geometric.data import Data
+
+
+
+# ------------------------ Process ---------------------------------------
+
+
+
+def clr_normalize_each_cell(adata, inplace=True):
+    """
+    Perform CLR (Centered Log-Ratio) normalization on protein (ADT) data per cell.
+
+    Args:
+        adata (AnnData): The input AnnData object containing the expression matrix.
+        inplace (bool): Whether to modify the original AnnData object or return a copy.
+
+    Returns:
+        AnnData: The CLR-normalized AnnData object.
+    """
+    def seurat_clr(x):
+        s = np.sum(np.log1p(x[x > 0]))
+        exp = np.exp(s / len(x))
+        return np.log1p(x / exp)
+
+    if not inplace:
+        adata = adata.copy()
+
+    adata.X = np.apply_along_axis(
+        seurat_clr, 1, (adata.X.toarray() if scipy.sparse.issparse(adata.X) else np.array(adata.X))
+    )
+    return adata
+
+
+
+def pca(adata, use_reps=None, n_comps=10):
+    """
+    Perform PCA (Principal Component Analysis) on the input AnnData object.
+
+    Args:
+        adata (AnnData): The input data.
+        use_reps (str, optional): Use a precomputed feature representation (e.g., adata.obsm['X_pca']).
+        n_comps (int): Number of principal components.
+
+    Returns:
+        np.ndarray: The PCA-transformed matrix.
+    """
+    from sklearn.decomposition import PCA
+    pca_model = PCA(n_components=n_comps)
+
+    if use_reps is not None:
+        feat_pca = pca_model.fit_transform(adata.obsm[use_reps])
+    else:
+        feat_pca = pca_model.fit_transform(adata.X.toarray() if scipy.sparse.issparse(adata.X) else adata.X)
+
+    return feat_pca
+
+
+def normalize(adata, highly_genes=3000):
+    """
+    Normalize RNA data and extract highly variable genes.
+
+    Args:
+        adata (AnnData): The input RNA data.
+        highly_genes (int): Number of top highly variable genes to retain.
+
+    Returns:
+        AnnData: The processed AnnData object.
+    """
+    sc.pp.filter_genes(adata, min_cells=100)
+    sc.pp.highly_variable_genes(adata, flavor="seurat_v3", n_top_genes=highly_genes)
+    adata = adata[:, adata.var['highly_variable']].copy()
+    adata.X = adata.X / np.sum(adata.X, axis=1).reshape(-1, 1) * 10000
+    sc.pp.scale(adata, zero_center=False, max_value=10)
+    return adata
+
+
+
+def Protein(adata):
+    """
+    Normalize ADT (Protein) data using CLR and scale it.
+
+    Args:
+        adata (AnnData): The input ADT data.
+
+    Returns:
+        AnnData: The processed ADT data.
+    """
+    adata = clr_normalize_each_cell(adata)
+    sc.pp.scale(adata)
+    return adata
+
+
+# def tfidf(X):
+#     """
+#     Compute TF-IDF matrix for input count matrix.
+
+#     Args:
+#         X (np.ndarray or sparse): Count matrix.
+
+#     Returns:
+#         np.ndarray or sparse: TF-IDF normalized matrix.
+#     """
+#     idf = X.shape[0] / X.sum(axis=0)
+#     if scipy.sparse.issparse(X):
+#         tf = X.multiply(1 / X.sum(axis=1))
+#         return tf.multiply(idf)
+#     else:
+#         tf = X / X.sum(axis=1, keepdims=True)
+#         return tf * idf
+
+def tfidf(X):
+    """
+    Compute TF-IDF matrix for input count matrix.
+
+    Args:
+        X (np.ndarray or sparse): Count matrix.
+
+    Returns:
+        np.ndarray or sparse: TF-IDF normalized matrix in CSR sparse format.
+    """
+    import scipy.sparse as sp
+    idf = X.shape[0] / X.sum(axis=0)
+    if sp.issparse(X):
+        tf = X.multiply(1 / X.sum(axis=1))
+        return sp.csr_matrix(tf.multiply(idf))
+    else:
+        tf = X / X.sum(axis=1, keepdims=True)
+        return tf * idf
+
+
+
+
+def lsi(adata: anndata.AnnData, n_components, use_highly_variable: Optional[bool] = None, **kwargs) -> None:
+    """
+    Perform LSI (Latent Semantic Indexing) on AnnData.
+
+    Args:
+        adata (AnnData): The input data.
+        n_components (int): Number of components.
+        use_highly_variable (bool): Whether to use only highly variable genes.
+    """
+    if use_highly_variable is None:
+        use_highly_variable = "highly_variable" in adata.var
+    adata_use = adata[:, adata.var["highly_variable"]] if use_highly_variable else adata
+    X = tfidf(adata_use.X)
+    X_norm = sklearn.preprocessing.Normalizer(norm="l1").fit_transform(X)
+    X_norm = np.log1p(X_norm * 1e4)
+    X_lsi = sklearn.utils.extmath.randomized_svd(X_norm, n_components, **kwargs)[0]
+    X_lsi -= X_lsi.mean(axis=1, keepdims=True)
+    X_lsi /= X_lsi.std(axis=1, ddof=1, keepdims=True)
+    adata.obsm["X_lsi"] = X_lsi[:, 1:]
+
+
+
+def adata_preprocess_1(adata, min_cells=100, pca_n_comps=2000, HVG=3000):
+    """
+    Basic preprocessing pipeline for RNA modality.
+
+    Args:
+        adata (AnnData): RNA expression data.
+        min_cells (int): Minimum cells per gene.
+        pca_n_comps (int): Not used in current function.
+        HVG (int): Number of highly variable genes.
+
+    Returns:
+        np.ndarray: Processed RNA expression matrix.
+    """
+    sc.pp.filter_genes(adata, min_cells=min_cells)
+    sc.pp.filter_cells(adata, min_counts=3)
+    sc.pp.highly_variable_genes(adata, flavor="seurat_v3", n_top_genes=HVG)
+    sc.pp.normalize_total(adata, target_sum=1e4)
+    sc.pp.log1p(adata)
+    sc.pp.scale(adata, zero_center=False, max_value=10)
+    return adata[:, adata.var['highly_variable']].X
+
+
+
+
+class DualGraphData(Data):
+    """
+    Custom PyTorch Geometric Data structure for dual-graph learning.
+
+    Attributes:
+        x_RNA: RNA feature matrix.
+        x_ADT: ADT feature matrix.
+        sim_edge_index: Indices for similarity-based edges.
+        sim_edge_weight: Weights for similarity edges.
+        dist_edge_index: Indices for spatial distance-based edges.
+        dist_edge_weight: Weights for spatial edges.
+        common_edge_index: Overlap of similarity and spatial edges.
+        common_edge_weight: Weights for common edges.
+    """
+    def __init__(self, x_RNA, x_ADT, sim_edge_index, sim_edge_weight,
+                 dist_edge_index, dist_edge_weight, common_edge_index, common_edge_weight):
+        super().__init__()
+        self.x_RNA = x_RNA
+        self.x_ADT = x_ADT
+        self.sim_edge_index = sim_edge_index
+        self.sim_edge_weight = sim_edge_weight
+        self.dist_edge_index = dist_edge_index
+        self.dist_edge_weight = dist_edge_weight
+        self.common_edge_index = common_edge_index
+        self.common_edge_weight = common_edge_weight
+
+
+
+def build_dual_graph(RNA_expression, ADT_expression, cell_positions, device='cpu', num_neighbors=15):
+    """
+    Build a dual graph based on expression similarity and spatial proximity.
+
+    Args:
+        RNA_expression (np.ndarray): RNA expression matrix.
+        ADT_expression (np.ndarray): ADT expression matrix.
+        cell_positions (np.ndarray): 2D coordinates of cells.
+        device (str): Device to place tensors ('cpu' or 'cuda').
+        num_neighbors (int): Number of neighbors for KNN.
+
+    Returns:
+        DualGraphData: PyTorch Geometric-compatible graph object.
+    """
+    similarity_matrix = cosine_similarity(RNA_expression)
+
+    nbrs = NearestNeighbors(n_neighbors=num_neighbors + 1, metric='cosine').fit(RNA_expression)
+    distances, indices = nbrs.kneighbors(RNA_expression)
+
+    adjacency_matrix = np.zeros_like(similarity_matrix, dtype=int)
+    for i in range(len(RNA_expression)):
+        for j in indices[i][1:]:
+            adjacency_matrix[i, j] = 1
+            adjacency_matrix[j, i] = 1
+
+    sim_edge_index = torch.tensor(np.array(np.nonzero(adjacency_matrix)), dtype=torch.long).to(device)
+    sim_edge_weight = torch.tensor(similarity_matrix[adjacency_matrix > 0], dtype=torch.float).to(device)
+
+    distance_matrix = cdist(cell_positions, cell_positions, metric='euclidean')
+    knn_graph = kneighbors_graph(cell_positions, n_neighbors=num_neighbors, mode='distance', include_self=False)
+    knn_graph = knn_graph.maximum(knn_graph.T)
+
+    dist_edge_index = torch.tensor(np.array(knn_graph.nonzero()), dtype=torch.long).to(device)
+    dist_edge_weight = torch.ones_like(torch.tensor(knn_graph.data, dtype=torch.float)).to(device)
+
+    sim_edges = set(zip(sim_edge_index[0].tolist(), sim_edge_index[1].tolist()))
+    dist_edges = set(zip(dist_edge_index[0].tolist(), dist_edge_index[1].tolist()))
+    common_edges = sim_edges.intersection(dist_edges)
+
+    common_edge_index = torch.tensor(list(zip(*common_edges)), dtype=torch.long).to(device)
+    common_edge_weight = torch.ones(common_edge_index.shape[1], dtype=torch.float).to(device)
+
+    x_RNA = torch.tensor(RNA_expression, dtype=torch.float).to(device)
+    x_ADT = torch.tensor(ADT_expression, dtype=torch.float).to(device)
+
+    return DualGraphData(
+        x_RNA=x_RNA,
+        x_ADT=x_ADT,
+        sim_edge_index=sim_edge_index,
+        sim_edge_weight=sim_edge_weight,
+        dist_edge_index=dist_edge_index,
+        dist_edge_weight=dist_edge_weight,
+        common_edge_index=common_edge_index,
+        common_edge_weight=common_edge_weight
+    )
+
+
+
+def preprocess_universal(adata_RNA, adata_omics2, dataset_name):
+    """
+    Dataset-specific preprocessing for RNA + second modality (ADT/Protein for 10x HLN, ATAC for Mouse Brain),
+    matching official ARISE code/hln.py and code/mouse_brain.py.
+    """
+    # Preprocess RNA
+    sc.pp.filter_genes(adata_RNA, min_cells=10)
+    if not dataset_name.startswith("10x"):
+        sc.pp.filter_cells(adata_RNA, min_genes=200)
+    sc.pp.highly_variable_genes(adata_RNA, flavor="seurat_v3", n_top_genes=3000)
+    sc.pp.normalize_total(adata_RNA, target_sum=1e4)
+    sc.pp.log1p(adata_RNA)
+    sc.pp.scale(adata_RNA)
+
+    adata_RNA_high = adata_RNA[:, adata_RNA.var['highly_variable']]
+
+    # Preprocess second modality
+    if dataset_name.startswith("10x"):
+        # ---------- 10x Human Lymph Node (RNA + Protein/ADT) ----------
+        RNA_expression = adata_RNA_high.X
+        if scipy.sparse.issparse(RNA_expression):
+            RNA_expression = RNA_expression.toarray()
+
+        adata_omics2 = adata_omics2[adata_RNA.obs_names].copy()
+        adata_omics2 = Protein(adata_omics2)
+        ADT_expression = adata_omics2.X
+    else:
+        # ---------- Mouse Brain (RNA PCA-50 + ATAC LSI-50) ----------
+        adata_RNA.obsm['feat'] = pca(adata_RNA_high, n_comps=50)
+        RNA_expression = adata_RNA.obsm['feat']
+
+        adata_omics2 = adata_omics2[adata_RNA.obs_names].copy()
+        sc.pp.highly_variable_genes(adata_omics2, flavor="seurat_v3", n_top_genes=3000)
+        if "X_lsi" not in adata_omics2.obsm:
+            lsi(adata_omics2, use_highly_variable=False, n_components=51)
+        adata_omics2.obsm['feat'] = adata_omics2.obsm['X_lsi'].copy()
+        ADT_expression = adata_omics2.obsm['feat']
+
+    if scipy.sparse.issparse(ADT_expression):
+        ADT_expression = ADT_expression.toarray()
+
+    return np.ascontiguousarray(RNA_expression, dtype=np.float32), np.ascontiguousarray(ADT_expression, dtype=np.float32)
+
+
+def preprocess_HLN(adata_RNA, adata_ADT):
+    return preprocess_universal(adata_RNA, adata_ADT, "10x_human_lymph_node_A1")
+
+
+
+# ------------------------ Model ---------------------------------------
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch_geometric.nn import GCNConv
+
+class DualGCN(nn.Module):
+    """
+    A dual-stream Graph Convolutional Network for multimodal representation learning.
+
+    Args:
+        in_channels (int): Number of input features for the RNA modality.
+        hidden_channels (int): Number of hidden units in GCN layers.
+        out_channels (int): Number of output embedding dimensions.
+        q (int): Dimension of ADT modality.
+        dropout (float): Dropout rate.
+    """
+
+    def __init__(self, in_channels, hidden_channels, out_channels, q, dropout=0.5):
+        super(DualGCN, self).__init__()
+
+        # RNA stream: similarity-based and distance-based GCN branches
+        self.x_RNA1 = GCNConv(in_channels, hidden_channels)
+        self.x_RNA2 = GCNConv(in_channels, hidden_channels)
+
+        # ADT stream: initial embedding
+        self.protein3 = GCNConv(q, out_channels)
+
+        # Project RNA branches to embedding space
+        self.sim_conv = GCNConv(hidden_channels, out_channels)
+        self.dist_conv = GCNConv(hidden_channels, out_channels)
+
+        # Optional projection from RNA to ADT space
+        self.protein = GCNConv(hidden_channels, out_channels)
+
+        # Fusion layers
+        self.fusion_layer1 = nn.Sequential(nn.Linear(2 * out_channels, out_channels))
+        self.fusion_layer2 = nn.Sequential(nn.Linear(2 * out_channels, out_channels))
+
+        # Decoder layers for reconstruction
+        self.dropout = dropout
+        self.deconv1 = nn.Linear(out_channels, hidden_channels)
+        self.deconv2 = nn.Linear(hidden_channels, in_channels)
+        self.deconv4 = nn.Linear(hidden_channels, q)
+        self.deconv5 = nn.Linear(hidden_channels, q + in_channels)
+
+    def forward(self, x_RNA, x_ADT, sim_edge_index, sim_edge_weight,
+                dist_edge_index, dist_edge_weight, common_edge_index, common_edge_weight):
+        """
+        Forward pass for dual GCN.
+        Returns multiple embeddings: sim_z, dist_z, fused_z, fused_with_adt_z, adt_z
+        """
+        xs = F.relu(self.x_RNA1(x_RNA, sim_edge_index, sim_edge_weight))
+        xs = F.dropout(xs, self.dropout, training=self.training)
+
+        xd = F.relu(self.x_RNA2(x_RNA, dist_edge_index, dist_edge_weight))
+        xd = F.dropout(xd, self.dropout, training=self.training)
+
+        x_sim = self.sim_conv(xs, sim_edge_index, sim_edge_weight)
+        x_dist = self.dist_conv(xd, dist_edge_index, dist_edge_weight)
+        pro = self.protein3(x_ADT, common_edge_index, common_edge_weight)
+
+        combined = torch.cat([x_sim, x_dist], dim=1)
+        fused = self.fusion_layer1(combined)
+
+        combined_protein = torch.cat([fused, pro], dim=1)
+        fused_pro = self.fusion_layer2(combined_protein)
+
+        return x_sim, x_dist, fused, fused_pro, pro
+
+    # RNA reconstruction
+    def reconstruct(self, z):
+        x_recon = F.relu(self.deconv1(z))
+        return self.deconv2(x_recon)
+
+    # ADT reconstruction
+    def reconstruct2(self, z):
+        x_recon = F.relu(self.deconv1(z))
+        return self.deconv4(x_recon)
+
+    # Joint RNA+ADT reconstruction
+    def reconstruct3(self, z):
+        x_recon = F.relu(self.deconv1(z))
+        return self.deconv5(x_recon)
+
+class Dual(nn.Module):
+    """
+    Dual Spatially-regularized Deep Multimodal Clustering with Consistency (Dual).
+
+    Args:
+        in_channels (int): Dimension of RNA input features.
+        hidden_channels (int): Hidden layer dimension in GCN.
+        out_channels (int): Output embedding size.
+        q (int): Number of ADT features.
+        num_clusters (int): Number of target clusters.
+        beta (float): Weight for reconstruction loss.
+        gamma (float): [Not used here] placeholder for other potential losses.
+        delta (float): [Not used here] placeholder for additional losses.
+        dropout (float): Dropout rate.
+        l1_lambda (float): L1 regularization weight.
+        l2_lambda (float): L2 regularization weight.
+    """
+
+    def __init__(self, in_channels, hidden_channels, out_channels, q, num_clusters,
+                 beta, gamma, delta, dropout,
+                 l1_lambda=1e-4, l2_lambda=1e-3):
+        super(Dual, self).__init__()
+        self.gcn = DualGCN(in_channels, hidden_channels, out_channels, q, dropout)
+        self.cluster_layer = nn.Parameter(torch.Tensor(num_clusters, out_channels))
+        self.num_clusters = num_clusters
+        self.beta = beta
+        self.gamma = gamma
+        self.delta = delta
+        self.l1_lambda = l1_lambda
+        self.l2_lambda = l2_lambda
+        self.init_weights()
+
+    def init_weights(self):
+        nn.init.xavier_uniform_(self.cluster_layer.data)
+
+    def forward(self, x_RNA, x_ADT, sim_edge_index, sim_edge_weight,
+                dist_edge_index, dist_edge_weight, common_edge_index, common_edge_weight):
+        return self.gcn(x_RNA, x_ADT, sim_edge_index, sim_edge_weight,
+                        dist_edge_index, dist_edge_weight, common_edge_index, common_edge_weight)
+
+    def target_distribution(self, q):
+        """
+        Soft clustering target distribution for deep clustering loss.
+        """
+        weight = q ** 2 / q.sum(0)
+        return (weight.t() / weight.sum(1)).t()
+
+    def compute_regularization_loss(self):
+        l1_loss = sum(torch.sum(torch.abs(p)) for p in self.parameters())
+        l2_loss = sum(torch.sum(p ** 2) for p in self.parameters())
+        return self.l1_lambda * l1_loss + self.l2_lambda * l2_loss
+
+    def compute_losses(self, x_RNA, x_ADT, sim_z, dist_z, fused_z, fused_pro, combined_raw, pro):
+        """
+        Compute total loss including reconstruction and spatial regularization.
+        """
+        l_rec = F.mse_loss(combined_raw, self.gcn.reconstruct3(fused_pro))
+        l_sim = F.mse_loss(x_RNA, self.gcn.reconstruct(sim_z))
+        l_dist = F.mse_loss(x_RNA, self.gcn.reconstruct(dist_z))
+        l_adt = F.mse_loss(x_ADT, self.gcn.reconstruct2(pro))
+
+        if getattr(self, 'use_sim_spatial_reg', False):
+            l_spatial = self.spatial_regularization_loss(fused_z, dist_edge_index=self.gcn_input.sim_edge_index,
+                                                         dist_edge_weight=self.gcn_input.sim_edge_weight)
+        else:
+            l_spatial = self.spatial_regularization_loss(fused_z, dist_edge_index=self.gcn_input.dist_edge_index,
+                                                         dist_edge_weight=self.gcn_input.dist_edge_weight)
+
+        reg_loss = self.compute_regularization_loss()
+        total_loss = self.beta * (l_rec + l_sim + l_dist + l_adt) + self.gamma * l_spatial + self.delta * reg_loss
+
+        return total_loss, l_rec
+
+    def cosine_similarity(self, emb):
+        mat = torch.matmul(emb, emb.T)
+        norm = torch.norm(emb, p=2, dim=1).reshape((emb.shape[0], 1))
+        mat = torch.div(mat, torch.matmul(norm, norm.T))
+        if torch.any(torch.isnan(mat)):
+            mat = torch.where(torch.isnan(mat), torch.zeros_like(mat), mat)
+        mat = mat - torch.diag_embed(torch.diag(mat))
+        return mat
+
+    def spatial_regularization_loss(self, emb, dist_edge_index, dist_edge_weight):
+        """
+        Spatial regularization to encourage local smoothness and contrastive separation.
+        """
+        num_nodes = emb.size(0)
+        graph_nei = torch.sparse_coo_tensor(dist_edge_index, torch.ones_like(dist_edge_weight),
+                                            size=(num_nodes, num_nodes)).to_dense()
+        graph_neg = 1 - graph_nei
+        sim_mat = torch.sigmoid(self.cosine_similarity(emb))
+
+        neigh_loss = torch.mul(graph_nei, torch.log(sim_mat + 1e-10)).mean()
+        neg_loss = torch.mul(graph_neg, torch.log(1 - sim_mat + 1e-10)).mean()
+
+        return -(neigh_loss + neg_loss) / 2
+
+class TriGCN(nn.Module):
+    """
+    A triple-stream Graph Convolutional Network for multimodal representation learning (3 Modalities).
+
+    Args:
+        in_channels (int): Number of input features for the RNA modality.
+        hidden_channels (int): Number of hidden units in GCN layers.
+        out_channels (int): Number of output embedding dimensions.
+        q (int): Dimension of ADT (Protein) modality.
+        dropout (float): Dropout rate.
+    """
+
+    def __init__(self, in_channels, hidden_channels, out_channels, q, dropout=0.5):
+        super(TriGCN, self).__init__()
+
+        # RNA stream: similarity-based and distance-based GCN branches
+        self.x_RNA1 = GCNConv(in_channels, hidden_channels)
+        self.x_RNA2 = GCNConv(in_channels, hidden_channels)
+
+        # ADT stream: initial embedding
+        self.protein3 = GCNConv(q, out_channels)
+
+        # Project RNA branches to embedding space
+        self.sim_conv = GCNConv(hidden_channels, out_channels)
+        self.dist_conv = GCNConv(hidden_channels, out_channels)
+
+        # Fusion layers
+        # Fusion 1: Combine RNA Similarity and Distance features
+        self.fusion_layer1 = nn.Sequential(nn.Linear(2 * out_channels, out_channels))
+        # Fusion 2: Combine Fused RNA features with ADT features
+        self.fusion_layer2 = nn.Sequential(nn.Linear(2 * out_channels, out_channels))
+
+        # Decoder layers for reconstruction
+        self.dropout = dropout
+        self.deconv1 = nn.Linear(out_channels, hidden_channels)
+
+        self.deconv2 = nn.Linear(hidden_channels, in_channels)       # For RNA recon
+        self.deconv4 = nn.Linear(hidden_channels, q)                 # For ADT recon
+        self.deconv5 = nn.Linear(hidden_channels, q + in_channels)   # For Combined recon
+
+    def forward(self, x_RNA, x_ADT, sim_edge_index, sim_edge_weight,
+                dist_edge_index, dist_edge_weight, common_edge_index, common_edge_weight):
+        """
+        Forward pass for dual GCN.
+        Returns multiple embeddings: x_sim, x_dist, fused (RNA), fused_pro (RNA+ADT), pro
+        """
+        # RNA Encoder
+        xs = F.relu(self.x_RNA1(x_RNA, sim_edge_index, sim_edge_weight))
+        xs = F.dropout(xs, self.dropout, training=self.training)
+
+        xd = F.relu(self.x_RNA2(x_RNA, dist_edge_index, dist_edge_weight))
+        xd = F.dropout(xd, self.dropout, training=self.training)
+
+        x_sim = self.sim_conv(xs, sim_edge_index, sim_edge_weight)
+        x_dist = self.dist_conv(xd, dist_edge_index, dist_edge_weight)
+
+        # ADT Encoder
+        pro = self.protein3(x_ADT, common_edge_index, common_edge_weight)
+
+        # Fusion
+        combined = torch.cat([x_sim, x_dist], dim=1)
+        fused = self.fusion_layer1(combined)
+
+        combined_protein = torch.cat([fused, pro], dim=1)
+        fused_pro = self.fusion_layer2(combined_protein)
+
+        return x_sim, x_dist, fused, fused_pro, pro
+
+    # RNA reconstruction
+    def reconstruct(self, z):
+        x_recon = F.relu(self.deconv1(z))
+        return self.deconv2(x_recon)
+
+    # ADT reconstruction
+    def reconstruct2(self, z):
+        x_recon = F.relu(self.deconv1(z))
+        return self.deconv4(x_recon)
+
+    # Joint RNA+ADT reconstruction
+    def reconstruct3(self, z):
+        x_recon = F.relu(self.deconv1(z))
+        return self.deconv5(x_recon)
+
+
+class Tri(nn.Module):
+    """
+    Triple Spatially-regularized Deep Multimodal Clustering with Consistency (Tri)
+    for 3 Modalities.
+
+    Args:
+        in_channels (int): Dimension of RNA input features.
+        hidden_channels (int): Hidden layer dimension in GCN.
+        out_channels (int): Output embedding size.
+        q (int): Number of ADT features.
+        num_clusters (int): Number of target clusters.
+        beta (float): Weight for reconstruction loss.
+        gamma (float): Weight for spatial regularization loss.
+        delta (float): Weight for parameter regularization loss.
+        dropout (float): Dropout rate.
+        l1_lambda (float): L1 regularization weight.
+        l2_lambda (float): L2 regularization weight.
+    """
+
+    def __init__(self, in_channels, hidden_channels, out_channels, q, num_clusters,
+                 beta, gamma, delta, dropout,
+                 l1_lambda=1e-4, l2_lambda=1e-3):
+        super(Tri, self).__init__()
+        self.gcn = TriGCN(in_channels, hidden_channels, out_channels, q, dropout=dropout)
+        self.cluster_layer = nn.Parameter(torch.Tensor(num_clusters, out_channels))
+        self.num_clusters = num_clusters
+
+        self.beta = beta
+        self.gamma = gamma
+        self.delta = delta
+        self.l1_lambda = l1_lambda
+        self.l2_lambda = l2_lambda
+
+        self.init_weights()
+
+    def init_weights(self):
+        nn.init.xavier_uniform_(self.cluster_layer.data)
+
+    def forward(self, x_RNA, x_ADT, sim_edge_index, sim_edge_weight,
+                dist_edge_index, dist_edge_weight, common_edge_index, common_edge_weight):
+        return self.gcn(x_RNA, x_ADT, sim_edge_index, sim_edge_weight,
+                        dist_edge_index, dist_edge_weight, common_edge_index, common_edge_weight)
+
+    def target_distribution(self, q):
+        """
+        Soft clustering target distribution for deep clustering loss.
+        """
+        weight = q ** 2 / q.sum(0)
+        return (weight.t() / weight.sum(1)).t()
+
+    def compute_regularization_loss(self):
+        l1_loss = 0
+        l2_loss = 0
+        for param in self.parameters():
+            l1_loss += torch.sum(torch.abs(param))
+            l2_loss += torch.sum(param.pow(2))
+        return self.l1_lambda * l1_loss + self.l2_lambda * l2_loss
+
+    def compute_losses(self, x_RNA, x_ADT, sim_z, dist_z, fused_z, fused_pro, combined_raw, pro, dist_edge_index, dist_edge_weight):
+        """
+        Compute total loss including reconstruction and spatial regularization.
+        """
+        # Reconstruction losses
+        l_rec = F.mse_loss(combined_raw, self.gcn.reconstruct3(fused_pro))
+        l_sim = F.mse_loss(x_RNA, self.gcn.reconstruct(sim_z))
+        l_dist = F.mse_loss(x_RNA, self.gcn.reconstruct(dist_z))
+        l_adt = F.mse_loss(x_ADT, self.gcn.reconstruct2(pro))
+
+        # Spatial regularization loss (applied to RNA-fused latent space or final fused space)
+        l_spatial = self.spatial_regularization_loss(fused_z, dist_edge_index, dist_edge_weight)
+
+        # L1/L2 Parameter Regularization
+        reg_loss = self.compute_regularization_loss()
+
+        # Total loss calculation
+        total_loss = self.beta * (l_rec + l_sim + l_dist + l_adt) + self.gamma * l_spatial + self.delta * reg_loss
+
+        return total_loss, l_rec
+
+    def cosine_similarity(self, emb):
+        # Cosine similarity matrix computation
+        mat = torch.matmul(emb, emb.T)
+        norm = torch.norm(emb, p=2, dim=1).reshape((emb.shape[0], 1))
+        mat = torch.div(mat, torch.matmul(norm, norm.T))
+        if torch.any(torch.isnan(mat)):
+            mat = torch.where(torch.isnan(mat), torch.zeros_like(mat), mat)
+        mat = mat - torch.diag_embed(torch.diag(mat))  # Remove self-similarity (diagonal)
+        return mat
+
+    def spatial_regularization_loss(self, emb, dist_edge_index, dist_edge_weight):
+        """
+        Spatial regularization to encourage local smoothness and contrastive separation.
+        """
+        num_nodes = emb.size(0)
+        # Create neighborhood adjacency matrix
+        graph_nei = torch.sparse_coo_tensor(
+            dist_edge_index,
+            torch.ones_like(dist_edge_weight),
+            size=(num_nodes, num_nodes)
+        ).to_dense()
+        graph_neg = 1 - graph_nei
+
+        # Sigmoid scaled similarity
+        sim_mat = torch.sigmoid(self.cosine_similarity(emb))
+
+        # Attract neighbors, repel non-neighbors
+        neigh_loss = torch.mul(graph_nei, torch.log(sim_mat + 1e-10)).mean()
+        neg_loss = torch.mul(graph_neg, torch.log(1 - sim_mat + 1e-10)).mean()
+
+        return -(neigh_loss + neg_loss) / 2
+
+
+# ------------------------ Train ---------------------------------------
+
+import torch
+import torch.nn.functional as F
+from sklearn.cluster import KMeans
+import numpy as np
+# from model import Dual
+from sklearn.metrics import (
+    adjusted_rand_score,
+    normalized_mutual_info_score,
+    silhouette_score
+)
+
+
+def evaluate_model(model, data):
+    """
+    Run the model in evaluation mode and return fused predictions and embeddings.
+
+    Args:
+        model (Dual): The trained model.
+        data (DualGraphData): Graph data with features and edges.
+
+    Returns:
+            - fused_pro: fused probability (output of final prediction layer),
+            - sim_z: RNA similarity graph embedding,
+            - dist_z: spatial distance graph embedding.
+    """
+    model.eval()
+    with torch.no_grad():
+        sim_z, dist_z, fused_z ,fused_pro,pro = model(data.x_RNA, data.x_ADT, data.sim_edge_index, data.sim_edge_weight ,data.dist_edge_index, data.dist_edge_weight, data.common_edge_index , data.common_edge_weight)
+    return fused_pro.cpu().numpy(), sim_z.cpu().numpy(), dist_z.cpu().numpy()
+
+def cluster_embeddings(embeddings, num_clusters):
+    """
+    Perform KMeans clustering on the embeddings.
+
+    Args:
+        embeddings (np.ndarray): Feature embeddings.
+        num_clusters (int): Number of clusters.
+
+    Returns:
+         Predicted cluster labels.
+    """
+    kmeans = KMeans(n_clusters=num_clusters, n_init=10, random_state=42)
+    return kmeans.fit_predict(embeddings)
+
+def evaluate_model_performance(predicted_labels, true_labels):
+    valid_mask = pd.Series(true_labels).notna().values
+    y_true = pd.Series(true_labels).loc[valid_mask].astype(str)
+    y_pred = pd.Series(predicted_labels).loc[valid_mask].astype(str)
+    ari = adjusted_rand_score(y_true, y_pred)
+    nmi = normalized_mutual_info_score(y_true, y_pred)
+    return ari, nmi
+
+
+def initialize_model(data, input_dim, adt_dim, args):
+    """
+       Initialize the Dual model with hyperparameters.
+
+       Args:
+           data (DualGraphData): Input graph data.
+           input_dim (int): Input dimension of RNA features.
+           adt_dim (int): Input dimension of ADT features.
+           args (Namespace): Hyperparameters and settings.
+
+       Returns:
+           Dual: Initialized model instance.
+       """
+    model = Dual(
+        in_channels=input_dim,
+        hidden_channels=args.hidden_dim,
+        out_channels=args.out_dim,
+        q=adt_dim,
+        num_clusters=args.num_clusters,
+        beta=args.beta,
+        gamma=args.gamma,
+        delta=args.delta,
+        dropout=args.dropout,
+        l1_lambda=getattr(args, 'l1_lambda', 1e-4),
+        l2_lambda=getattr(args, 'l2_lambda', 1e-3)
+    ).to(args.device)
+    model.use_sim_spatial_reg = getattr(args, 'use_sim_spatial_reg', False)
+
+    return model
+
+
+def train_model(model, data, args ,true_labels):
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=1e-5)
+
+    combined_raw = torch.cat([data.x_RNA, data.x_ADT], dim=1)
+    best_ari = -1
+    best_nmi = -1
+    best_epoch = 0
+    best_embeddings = None
+    best_labels = None
+
+    for epoch in range(args.epochs):
+        model.train()
+        optimizer.zero_grad()
+
+        sim_z, dist_z, fused_z, fused_pro, pro = model(
+            data.x_RNA, data.x_ADT,
+            data.sim_edge_index, data.sim_edge_weight,
+            data.dist_edge_index, data.dist_edge_weight,
+            data.common_edge_index, data.common_edge_weight
+        )
+
+
+        model.gcn_input = data  # for spatial regularization
+
+        loss, l_rec = model.compute_losses(
+            data.x_RNA, data.x_ADT,
+            sim_z, dist_z, fused_z, fused_pro, combined_raw, pro
+        )
+
+        loss.backward()
+        optimizer.step()
+
+        if (epoch + 1) % 10 == 0 or epoch == 0:
+            print(f"Epoch {epoch + 1}, Total Loss: {loss.item():.4f}, Recon Loss: {l_rec.item():.4f}")
+
+        # Evaluate clustering performance
+        embeddings, _, _ = evaluate_model(model, data)
+
+        predicted_labels = cluster_embeddings(
+            embeddings,
+            args.num_clusters
+        )
+
+        ari, nmi = evaluate_model_performance(
+            predicted_labels,
+            true_labels
+        )
+
+        if ari > best_ari:
+            best_ari = ari
+            best_nmi = nmi
+            best_epoch = epoch + 1
+            best_embeddings = embeddings.copy()
+            best_labels = predicted_labels.copy()
+
+        print(f"Epoch {epoch+1:3d} | ARI: {ari:.4f} | NMI: {nmi:.4f}")
+
+    print("\n==============================")
+    print(f"Best checkpoint selected by ARI (Epoch {best_epoch})")
+    print(f"Best ARI        : {best_ari:.4f}")
+    print(f"Best NMI        : {best_nmi:.4f}")
+    print("==============================")
+
+    return model, best_embeddings, best_labels
+
+
+
+# ------------------------ Argument pass and random seed  ---------------------------------------
+
+import argparse
+import os
+import random
+import time
+import numpy as np
+import torch
+import sys
+import matplotlib.pyplot as plt
+import seaborn as sns
+import scanpy as sc
+import pandas as pd
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import (
+    adjusted_rand_score,
+    normalized_mutual_info_score,
+    adjusted_mutual_info_score,
+    homogeneity_score,
+    v_measure_score,
+    silhouette_score,
+    silhouette_samples,
+    calinski_harabasz_score,
+    davies_bouldin_score
+)
+
+def set_seed(seed=2024):
+    """
+    Set random seed for reproducibility across Python, NumPy, PyTorch, and CUDA.
+
+    Parameters
+    ----------
+    seed : int, default=2024
+        Random seed value.
+
+    Returns
+    -------
+    None
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['PYTHONHASHSEED'] = str(seed)
+
+# Set parameters.
+parser = argparse.ArgumentParser(description="Run ARISE multimodal spatial clustering benchmark")
+parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+parser.add_argument('--hidden_dim', type=int, default=512)
+parser.add_argument('--out_dim', type=int, default=64)
+parser.add_argument('--num_clusters', type=int, default=10)
+parser.add_argument('--beta', type=float, default=25)
+parser.add_argument('--gamma', type=float, default=10)
+parser.add_argument('--delta', type=float, default=1)
+parser.add_argument('--dropout', type=float, default=0)
+parser.add_argument('--lr', type=float, default=1e-3)
+parser.add_argument('--epochs', type=int, default=350)
+parser.add_argument('--dataset', type=int, default=None, help="Single dataset index to run (0 to 5)")
+parser.add_argument('--dataset_indices', type=int, nargs='+', default=None, help="List of dataset indices (e.g. --dataset_indices 0 1)")
+parser.add_argument('--seed', type=int, default=None, help="Single seed to run (e.g. --seed 0)")
+parser.add_argument('--seeds', type=int, nargs='+', default=None, help="List of seeds to run (e.g. --seeds 42 0 7)")
+parser.add_argument('--output_dir', type=str, default=None, help="Custom output directory")
+parser.add_argument('--api_url', type=str, default="https://model-performance.vercel.app/api/experiments/upload", help="Dashboard API URL for uploading experiment runs")
+
+# Set device to GPU if available, otherwise use CPU
+args, unknown = parser.parse_known_args()
+device = torch.device(args.device)
+args.device = device
+print(f"\n[Hardware] Compute Engine: {device}")
+if torch.cuda.is_available() and device.type == 'cuda':
+    print(f"[Hardware] GPU: {torch.cuda.get_device_name(0)} | VRAM: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB\n")
+else:
+    print("[Hardware] No GPU detected or CPU selected. Running on CPU.\n")
+
+# -------------------------------------- Run Configuration ---------------------------------------
+
+choices = [
+    ("10x_human_lymph_node_A1",
+     "https://drive.google.com/drive/folders/10z1N4MwW8Y49o8GlkYGBKVx1N7fiMuyC"),
+    ("10x_human_lymph_node_D1",
+     "https://drive.google.com/drive/folders/1-g_Ca2XMaMXF-MisuVY-wobWDX86O6zz"),
+    ("Mouse_Brain_E11_S1",
+     "https://drive.google.com/drive/folders/1zRwDJrYnks0LRzlAVRqPU7jE_OcStgPo"),
+    ("Mouse_Brain_E13_S1",
+     "https://drive.google.com/drive/folders/1GOufwIRjjfcd9Bi2GKtebzKoPCg2jVud"),
+    ("Mouse_Brain_E15_S1",
+     "https://drive.google.com/drive/folders/1rHkTL5OF5qPsEERypRGMS51SjUQ69tdD"),
+    ("Mouse_Brain_E18_S1",
+     "https://drive.google.com/drive/folders/1Xj1LNIAY93biS6JIMKNRODn5GvtCKADB"),
+]
+
+# Parse dataset selection
+if args.dataset is not None:
+    DATASET_INDICES = [args.dataset]
+elif args.dataset_indices is not None:
+    DATASET_INDICES = args.dataset_indices
+else:
+    DATASET_INDICES = [0, 1, 2, 3, 4, 5]
+
+# Parse seed selection
+if args.seed is not None:
+    SEEDS = [args.seed]
+elif args.seeds is not None:
+    SEEDS = args.seeds
+else:
+    SEEDS = [42, 0, 7, 123, 1234, 2022, 2023, 2024, 1337]
+
+MODEL_NAME = "ARISE"
+OUTPUT_DIR = args.output_dir if args.output_dir else os.getenv("OUTPUT_DIR", f"{MODEL_NAME}_outputs")
+RESULTS_DIR = os.path.join(OUTPUT_DIR, "results")
+VISUALS_DIR = os.path.join(OUTPUT_DIR, "visuals")
+os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(VISUALS_DIR, exist_ok=True)
+
+def make_json_serializable(obj):
+    if isinstance(obj, np.ndarray):
+        return [make_json_serializable(x) for x in obj.tolist()]
+    if isinstance(obj, (np.floating, np.float32, np.float64, np.float16)):
+        val = float(obj)
+        return 0.0 if (np.isnan(val) or np.isinf(val)) else val
+    if isinstance(obj, (np.integer, np.int64, np.int32, np.int16, np.int8)):
+        return int(obj)
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    if isinstance(obj, float):
+        return 0.0 if (np.isnan(obj) or np.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {str(k): make_json_serializable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+    return obj
+
+
+def export_dashboard_experiment(
+    model_id: str,
+    model_name: str,
+    dataset_name: str,
+    seed: int,
+    metrics_dict: dict,
+    hyperparameters: dict,
+    duration_seconds: float,
+    best_epoch: int = 0,
+    embeddings_data: Optional[dict] = None,
+    output_dir: str = "results",
+    api_url: Optional[str] = "https://model-performance.vercel.app/api/experiments/upload",
+    architecture: str = "Spatially-Regularized Dual Multimodal Graph Autoencoder (ARISE)",
+):
+    """Export standardized JSON artifacts and send directly to Dashboard via API."""
+    import json
+    import urllib.request
+
+    exp_dir = os.path.join(output_dir, "experiments", model_id, dataset_name, f"seed_{seed}")
+    os.makedirs(exp_dir, exist_ok=True)
+
+    safe_metrics = make_json_serializable(metrics_dict)
+    safe_hyperparameters = make_json_serializable(hyperparameters)
+    safe_embeddings = make_json_serializable(embeddings_data or {})
+    best_score = float(safe_metrics.get("Silhouette", 0.0))
+
+    with open(os.path.join(exp_dir, "metrics.json"), "w") as f:
+        json.dump({
+            "model_id": model_id,
+            "dataset": dataset_name,
+            "seed": int(seed),
+            "best_epoch": int(best_epoch),
+            "best_score": best_score,
+            "durationSeconds": float(duration_seconds),
+            "metrics": safe_metrics,
+        }, f, indent=2)
+
+    with open(os.path.join(exp_dir, "metadata.json"), "w") as f:
+        json.dump({
+            "model_name": model_name,
+            "dataset": dataset_name,
+            "seed": int(seed),
+            "durationSeconds": float(duration_seconds),
+            "hyperparameters": safe_hyperparameters,
+        }, f, indent=2)
+
+    if api_url:
+        try:
+            payload = {
+                "modelId": model_id,
+                "modelName": model_name,
+                "datasetId": dataset_name,
+                "datasetName": dataset_name.replace("_", " ").title(),
+                "seed": int(seed),
+                "bestEpoch": int(best_epoch),
+                "bestScore": best_score,
+                "durationSeconds": float(duration_seconds),
+                "finalMetrics": safe_metrics,
+                "history": [],
+                "embeddingsData": safe_embeddings,
+                "modelMetadata": {
+                    "architecture": architecture,
+                    "hyperparameters": safe_hyperparameters,
+                },
+            }
+            req = urllib.request.Request(
+                api_url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=15) as response:
+                if response.status == 200:
+                    print(f"🚀 Sent {model_name} ({dataset_name}, seed={seed}, {duration_seconds:.2f}s) to Dashboard API!")
+        except Exception as e:
+            print(f"ℹ️ Direct API push skipped ({e}). Data saved locally in {exp_dir}.")
+
+
+all_results = []
+all_dataset_adata = {}
+
+for dataset_idx in DATASET_INDICES:
+    dataset_name, folder_url = choices[dataset_idx]
+
+    print("\n" + "#"*80)
+    print(f" STARTING DATASET: {dataset_name} ".center(80, "#"))
+    print("#"*80)
+
+    # ------------------ Download & Path Configuration ------------------
+    base = f"data/{dataset_name}"
+    os.makedirs(base, exist_ok=True)
+
+    rna_path = os.path.join(base, "adata_RNA.h5ad")
+
+    # Human datasets have ADT; Mouse datasets have ATAC
+    if dataset_name.startswith("10x"):
+        other_path = os.path.join(base, "adata_ADT.h5ad")
+        annotation_path = os.path.join(base, "annotation.csv")
+        gt_column = "manual-anno"
+        data_type = '10x'
+    else:
+        other_path = os.path.join(base, "adata_ATAC.h5ad")
+        annotation_path = os.path.join(base, "anno.csv")
+        gt_column = "cluster"
+        data_type = 'Spatial-epigenome-transcriptome'
+
+    # Check if files already exist locally before triggering download
+    if not os.path.exists(rna_path) or not os.path.exists(other_path) or not os.path.exists(annotation_path):
+        print(f"Downloading dataset files into: {base}")
+        gdown_cmd = ".venv/bin/gdown" if os.path.exists(".venv/bin/gdown") else "gdown"
+        os.system(f'{gdown_cmd} --folder "{folder_url}" --output "{base}" --remaining-ok')
+        # If gdown created a subfolder, flatten files into base
+        for root, dirs, files in os.walk(base):
+            if root != base:
+                for f in files:
+                    src = os.path.join(root, f)
+                    dst = os.path.join(base, f)
+                    if not os.path.exists(dst):
+                        import shutil
+                        shutil.move(src, dst)
+    else:
+        print(f"Dataset files already exist at {base}. Skipping download.")
+
+    # ------------------ Load AnnData & Annotations ------------------
+    adata_omics1 = sc.read_h5ad(rna_path)
+    adata_omics2 = sc.read_h5ad(other_path)
+
+    adata_omics1.var_names_make_unique()
+    adata_omics2.var_names_make_unique()
+
+    anno_df = pd.read_csv(annotation_path, index_col=0)
+    adata_omics1.obs['ground_truth'] = anno_df[gt_column]
+    adata_omics2.obs['ground_truth'] = anno_df[gt_column]
+
+    # Preprocess RNA and second modality data (normalization, filtering, etc.)
+    set_seed(2024)
+    RNA_data, ADT_data = preprocess_universal(adata_omics1, adata_omics2, dataset_name)
+
+    if dataset_name.startswith("10x"):
+        args.out_dim = 64
+        args.beta = 25.0
+        args.l1_lambda = 1e-4
+        args.l2_lambda = 1e-3
+        args.use_sim_spatial_reg = False
+    else:
+        args.out_dim = 128
+        args.beta = 2.5
+        args.l1_lambda = 1e-4
+        args.l2_lambda = 1e-3
+        args.use_sim_spatial_reg = True
+
+    cell_positions = adata_omics1.obsm['spatial']
+    graph_data = build_dual_graph(RNA_data, ADT_data, cell_positions, device=device)
+
+    # ------------------ Seed Iterations ------------------
+    dataset_results = []
+    n_ground_truth = int(adata_omics1.obs["ground_truth"].dropna().nunique())
+    print(f"Number of ground truth classes: {n_ground_truth}")
+    args.num_clusters = n_ground_truth
+
+    best_ari = -1.0
+    best_seed = None
+    best_adata = None
+
+    for seed in SEEDS:
+        print(f"\n" + "-"*60)
+        print(f" Dataset: {dataset_name} | Seed: {seed} ".center(60, "-"))
+        print("-"*60)
+
+        seed_start_time = time.time()
+
+        # 1. Set seed
+        set_seed(seed)
+
+        # 2. Model Init
+        model = initialize_model(graph_data, RNA_data.shape[1], ADT_data.shape[1], args)
+
+        # 3. Model Training
+        model, final_embeddings, final_labels = train_model(model, graph_data, args, adata_omics1.obs['ground_truth'])
+
+        duration_sec = round(time.time() - seed_start_time, 2)
+
+        # 4. Score Generating
+        valid_mask = adata_omics1.obs['ground_truth'].notna().values
+        y_true = adata_omics1.obs.loc[valid_mask, 'ground_truth'].astype(str)
+        y_pred_eval = pd.Series(final_labels).loc[valid_mask].astype(str)
+        y_pred = final_labels.astype(str)
+
+        ari = adjusted_rand_score(y_true, y_pred_eval)
+        nmi = normalized_mutual_info_score(y_true, y_pred_eval)
+        ami = adjusted_mutual_info_score(y_true, y_pred_eval)
+        homogeneity = homogeneity_score(y_true, y_pred_eval)
+        v_measure = v_measure_score(y_true, y_pred_eval)
+
+        # Encode labels for geometric metrics (filtered by valid_mask)
+        le = LabelEncoder()
+        y_pred_int = le.fit_transform(y_pred_eval)
+        final_embeddings_eval = final_embeddings[valid_mask]
+
+        # Calculate Silhouette Score
+        try:
+            sil_score = float(silhouette_score(final_embeddings_eval, y_pred_int))
+        except Exception:
+            sil_score = float('nan')
+
+        # Calculate Calinski-Harabasz Index (CHI)
+        try:
+            chi_score = float(calinski_harabasz_score(final_embeddings_eval, y_pred_int))
+        except Exception:
+            chi_score = float('nan')
+
+        # Calculate Davies-Bouldin Index (DBI)
+        try:
+            dbi_score = float(davies_bouldin_score(final_embeddings_eval, y_pred_int))
+        except Exception:
+            dbi_score = float('nan')
+
+        print(f"\nResult for dataset: {dataset_name} | seed: {seed}")
+        print(f"ARI: {ari:.4f} | NMI: {nmi:.4f} | Silhouette: {sil_score:.4f} | CHI: {chi_score:.2f} | DBI: {dbi_score:.4f} | Duration: {duration_sec:.2f}s")
+
+        # Store seed results
+        res_dict = {
+            'dataset': dataset_name,
+            'seed': seed,
+            'ARI': ari,
+            'NMI': nmi,
+            'AMI': ami,
+            'Homogeneity': homogeneity,
+            'V-measure': v_measure,
+            'Silhouette': sil_score,
+            'CHI': chi_score,
+            'DBI': dbi_score,
+            'Duration': duration_sec
+        }
+        dataset_results.append(res_dict)
+        all_results.append(res_dict)
+
+        # Track best seed AnnData for cross-dataset visualizations
+        if ari > best_ari or best_adata is None:
+            best_ari = ari
+            best_seed = seed
+            best_adata = adata_omics1.copy()
+            best_adata.obsm['spatial'] = cell_positions
+            best_adata.obsm[f'{MODEL_NAME}_emb'] = final_embeddings.copy()
+            best_adata.obs[f'{MODEL_NAME}_domain'] = final_labels.copy()
+            best_adata.obs['domain'] = final_labels.copy()
+            best_adata.uns['selected_seed'] = best_seed
+
+        # ------------------ Plotting & Visualization ------------------
+        adata = adata_omics1.copy()
+        adata.obsm['ARISE'] = final_embeddings
+        adata.obs['ARISE'] = final_labels.astype(str)
+        if 'anno' not in adata.obs.columns and 'ground_truth' in adata.obs.columns:
+            adata.obs['anno'] = adata.obs['ground_truth']
+
+        fig, ax_list = plt.subplots(1, 3, figsize=(11, 3))
+        sc.pp.neighbors(adata, use_rep='ARISE', n_neighbors=10)
+        sc.tl.umap(adata)
+
+        sc.pl.umap(adata, color='ARISE', ax=ax_list[0], title='ARISE', s=20, show=False)
+        sc.pl.embedding(adata, basis='spatial', color='ARISE', ax=ax_list[1], title='ARISE', s=20, show=False)
+        sc.pl.embedding(adata, basis='spatial', color='anno', ax=ax_list[2], title='anno', s=20, show=False)
+        plt.tight_layout(w_pad=0.3)
+
+        seed_plots_dir = os.path.join(VISUALS_DIR, "seed_plots", dataset_name)
+        os.makedirs(seed_plots_dir, exist_ok=True)
+        os.makedirs(f"plots/{dataset_name}", exist_ok=True)
+        plt.savefig(f"{seed_plots_dir}/umap_seed_{seed}.png", dpi=150)
+        plt.savefig(f"plots/{dataset_name}/umap_seed_{seed}.png", dpi=150)
+        plt.close(fig)
+
+        # ------------------ Export to Database / Dashboard ------------------
+        try:
+            sample_sils = silhouette_samples(final_embeddings_eval, y_pred_int).tolist()
+        except Exception:
+            sample_sils = []
+
+        umap_coords = adata.obsm.get('X_umap', None)
+        embeddings_data = {
+            "umapCoordinates": umap_coords.tolist() if umap_coords is not None else [],
+            "spatialCoordinates": cell_positions.tolist() if cell_positions is not None else [],
+            "predictedLabels": y_pred.tolist(),
+            "groundTruthLabels": adata_omics1.obs['ground_truth'].astype(str).tolist(),
+            "sampleSilhouettes": sample_sils,
+        }
+        metrics_payload = {
+            "ARI": float(ari),
+            "NMI": float(nmi),
+            "AMI": float(ami),
+            "Homogeneity": float(homogeneity),
+            "V-measure": float(v_measure),
+            "Silhouette": float(sil_score),
+            "CHI": float(chi_score),
+            "DBI": float(dbi_score),
+        }
+        hp_payload = {
+            "epochs": args.epochs,
+            "lr": args.lr,
+            "hidden_dim": args.hidden_dim,
+            "out_dim": args.out_dim,
+            "beta": args.beta,
+            "gamma": args.gamma,
+            "delta": args.delta,
+        }
+        export_dashboard_experiment(
+            model_id="ARISE",
+            model_name=MODEL_NAME,
+            dataset_name=dataset_name,
+            seed=seed,
+            metrics_dict=metrics_payload,
+            hyperparameters=hp_payload,
+            duration_seconds=duration_sec,
+            best_epoch=args.epochs,
+            embeddings_data=embeddings_data,
+            output_dir=RESULTS_DIR,
+            api_url=args.api_url,
+        )
+
+    # Store best AnnData
+    if best_adata is not None:
+        all_dataset_adata[dataset_name] = best_adata
+        best_h5ad_path = os.path.join(RESULTS_DIR, f"{MODEL_NAME}_adata_{dataset_name}.h5ad")
+        best_adata.write_h5ad(best_h5ad_path)
+        print(f"[Saved] Best-ARI seed ({best_seed}) AnnData saved to: {best_h5ad_path}")
+
+    # Write dataset summary statistics and save csv for this dataset
+    df_ds = pd.DataFrame(dataset_results)
+    print("\n" + "="*80)
+    print(f" RESULTS SUMMARY FOR {dataset_name} ".center(80, "="))
+    print("="*80)
+    print(df_ds.to_string(index=False))
+    print("-"*80)
+    print("Summary Statistics:")
+    print(df_ds.describe().loc[['mean', 'std']])
+    print("="*80)
+
+    # Generate text summary with Mean ± SD format for this dataset
+    summary_lines = [f"Summary Stats for {dataset_name}:"]
+    metrics_list = ['ARI', 'NMI', 'AMI', 'Homogeneity', 'V-measure', 'Silhouette', 'CHI', 'DBI', 'Duration']
+    for metric in metrics_list:
+        mean_val = df_ds[metric].mean()
+        std_val = df_ds[metric].std()
+        summary_lines.append(f"{metric} = {mean_val:.4f} ± {std_val:.4f}")
+
+    dataset_summary_str = "\n".join(summary_lines)
+    print(dataset_summary_str)
+    print("="*80)
+
+    # Save the text summary for this dataset
+    with open(os.path.join(RESULTS_DIR, f"summary_{dataset_name}.txt"), "w") as f:
+        f.write(dataset_summary_str)
+
+    df_ds.to_csv(os.path.join(RESULTS_DIR, f"metrics_{dataset_name}.csv"), index=False)
+    # Also save to root results/ for compatibility
+    os.makedirs("results", exist_ok=True)
+    df_ds.to_csv(f"results/metrics_{dataset_name}.csv", index=False)
+    with open(f"results/summary_{dataset_name}.txt", "w") as f:
+        f.write(dataset_summary_str)
+    print(f"Saved dataset metrics to '{RESULTS_DIR}/metrics_{dataset_name}.csv'")
+    print(f"Saved dataset summary to '{RESULTS_DIR}/summary_{dataset_name}.txt'")
+
+    # Generate publication-quality boxplot + stripplot for this dataset
+    plt.figure(figsize=(14, 6))
+    df_ds_long = df_ds.melt(
+        id_vars=['seed'],
+        value_vars=['ARI', 'NMI', 'AMI', 'Homogeneity', 'V-measure', 'Silhouette'],
+        var_name='Metric',
+        value_name='Score'
+    )
+    sns.set_theme(style="whitegrid")
+    ax = sns.boxplot(
+        x='Metric',
+        y='Score',
+        data=df_ds_long,
+        palette='Set2',
+        showfliers=False,
+        width=0.5
+    )
+    sns.stripplot(
+        x='Metric',
+        y='Score',
+        data=df_ds_long,
+        color='black',
+        alpha=0.6,
+        jitter=0.2,
+        size=5,
+        ax=ax
+    )
+    plt.title(f"Variability of Metrics across {len(SEEDS)} Seeds ({dataset_name})", fontsize=14, pad=15)
+    plt.xlabel("Metric", fontsize=12, labelpad=10)
+    plt.ylabel("Score", fontsize=12, labelpad=10)
+    plt.ylim(0, 1.05)
+    plt.tight_layout()
+
+    boxplot_path = os.path.join(VISUALS_DIR, f"boxplot_{dataset_name}.png")
+    plt.savefig(boxplot_path, dpi=300)
+    plt.savefig(f"results/boxplot_{dataset_name}.png", dpi=300)
+    plt.close()
+    print(f"Saved variability boxplot to '{boxplot_path}'\n")
+
+# -------------------------------------- Global Summary statistics ---------------------------------------
+
+df_all = pd.DataFrame(all_results)
+df_all.to_csv(os.path.join(RESULTS_DIR, f"{MODEL_NAME}_benchmark_results.csv"), index=False)
+df_all.to_csv(os.path.join(RESULTS_DIR, "metrics_all_datasets.csv"), index=False)
+df_all.to_csv("results/metrics_all_datasets.csv", index=False)
+df_all.to_csv(f"results/{MODEL_NAME}_all_results.csv", index=False)
+
+# Compile global text summary
+global_summary_lines = [
+    "="*80,
+    f"GLOBAL SUMMARY: MEAN ± STD ACROSS {len(SEEDS)} SEEDS ({MODEL_NAME})",
+    "="*80
+]
+
+for d_name in df_all['dataset'].unique():
+    df_d = df_all[df_all['dataset'] == d_name]
+    global_summary_lines.append(f"\nDataset: {d_name}")
+    global_summary_lines.append("-" * len(f"Dataset: {d_name}"))
+    for metric in ['ARI', 'NMI', 'AMI', 'Homogeneity', 'V-measure', 'Silhouette', 'CHI', 'DBI', 'Duration']:
+        mean_val = df_d[metric].mean()
+        std_val = df_d[metric].std()
+        global_summary_lines.append(f"{metric} = {mean_val:.4f} ± {std_val:.4f}")
+global_summary_lines.append("\n" + "="*80)
+
+global_summary_str = "\n".join(global_summary_lines)
+print(global_summary_str)
+
+summary_stats_path = os.path.join(RESULTS_DIR, f"{MODEL_NAME}_summary_statistics.txt")
+with open(summary_stats_path, "w") as f:
+    f.write(global_summary_str)
+with open("results/summary_statistics.txt", "w") as f:
+    f.write(global_summary_str)
+
+print("\n" + "#"*80)
+print(" GLOBAL RESULTS ACROSS ALL DATASETS ".center(80, "#"))
+print("#"*80)
+print(df_all.groupby('dataset')[['ARI', 'NMI', 'Silhouette', 'CHI', 'DBI', 'Duration']].mean())
+print("#"*80)
+print(f"Saved combined metrics to '{RESULTS_DIR}/{MODEL_NAME}_benchmark_results.csv'")
+print(f"Saved global summary statistics to '{summary_stats_path}'")
+
+# Generate comparative global boxplot across all datasets
+df_all_long = df_all.melt(
+    id_vars=['dataset', 'seed'],
+    value_vars=['ARI', 'NMI', 'AMI', 'Homogeneity', 'V-measure', 'Silhouette'],
+    var_name='Metric',
+    value_name='Score'
+)
+
+fig, axes = plt.subplots(2, 3, figsize=(18, 12), sharey=True)
+axes = axes.flatten()
+metrics_list = ['ARI', 'NMI', 'AMI', 'Homogeneity', 'V-measure', 'Silhouette']
+
+sns.set_theme(style="whitegrid")
+for i, metric in enumerate(metrics_list):
+    df_metric = df_all_long[df_all_long['Metric'] == metric]
+    sns.boxplot(
+        ax=axes[i],
+        x='dataset',
+        y='Score',
+        data=df_metric,
+        palette='Set3',
+        showfliers=False
+    )
+    sns.stripplot(
+        ax=axes[i],
+        x='dataset',
+        y='Score',
+        data=df_metric,
+        color='black',
+        alpha=0.5,
+        jitter=0.15,
+        size=4
+    )
+    axes[i].set_title(f"{metric} Comparison", fontsize=14)
+    axes[i].set_xlabel("Dataset", fontsize=12)
+    axes[i].set_ylabel("Score", fontsize=12)
+    axes[i].set_xticklabels(axes[i].get_xticklabels(), rotation=45, ha='right')
+    axes[i].set_ylim(0, 1.05)
+
+plt.suptitle(f"{MODEL_NAME}: Performance Comparison Across All Datasets & {len(SEEDS)} Seeds", fontsize=18, y=0.98)
+plt.tight_layout()
+global_plot_path = os.path.join(VISUALS_DIR, f"{MODEL_NAME}_global_boxplot_comparison.png")
+plt.savefig(global_plot_path, dpi=300)
+plt.savefig("results/global_boxplot_comparison.png", dpi=300)
+plt.close()
+print(f"Saved global comparison boxplot to '{global_plot_path}'")
+
+# -------------------------------------------------------------------------------------------------
+# EXECUTE FULL VISUALIZATION SUITE (Exactly matching visualization-add.txt)
+# -------------------------------------------------------------------------------------------------
+try:
+    from visualizations import run_all_visualizations
+except ImportError:
+    import sys
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from visualizations import run_all_visualizations
+
+print("\n" + "="*85)
+print(f" GENERATING PUBLICATION VISUALIZATION SUITE ({MODEL_NAME}) ".center(85, "="))
+print("="*85)
+run_all_visualizations(
+    model_name=MODEL_NAME,
+    output_dir=OUTPUT_DIR,
+    df_results=df_all,
+    loaded_adatas=all_dataset_adata,
+    choices=choices,
+    dataset_indices=DATASET_INDICES
+)
+
+# -------------------------------------- End ---------------------------------------
+
+
+
+
+
+
