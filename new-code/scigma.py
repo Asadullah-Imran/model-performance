@@ -109,8 +109,11 @@ def lsi(adata: anndata.AnnData, n_components=20, use_highly_variable=True, **kwa
             neginf=0.0,
         )
 
-    if use_highly_variable:
-        sc.pp.highly_variable_genes(adata_lsi, flavor='seurat', n_top_genes=3000)
+    if use_highly_variable and "highly_variable" not in adata_lsi.var:
+        try:
+            sc.pp.highly_variable_genes(adata_lsi, flavor='seurat', n_top_genes=3000)
+        except ValueError:
+            sc.pp.highly_variable_genes(adata_lsi, flavor='seurat_v3', n_top_genes=3000)
     adata_use = (
         adata_lsi[:, adata_lsi.var["highly_variable"]]
         if use_highly_variable
