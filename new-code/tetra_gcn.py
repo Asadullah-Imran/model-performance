@@ -210,7 +210,10 @@ def preprocess_with_rna_pca(adata_RNA, adata_omics2, dataset_name, rna_pca_comps
     else:
         adata_omics2 = adata_omics2[adata_RNA.obs_names].copy()
         adata_omics2.X = tfidf(adata_omics2.X)
-        sc.pp.normalize_per_cell(adata_omics2, counts_per_cell_after=1e4)
+        if hasattr(sc.pp, "normalize_per_cell"):
+            sc.pp.normalize_per_cell(adata_omics2, counts_per_cell_after=1e4)
+        else:
+            sc.pp.normalize_total(adata_omics2, target_sum=1e4)
         sc.pp.log1p(adata_omics2)
         n_comps = min(60, adata_omics2.shape[1])
         adata_omics2.obsm['feat'] = pca(adata_omics2, n_comps=n_comps)
