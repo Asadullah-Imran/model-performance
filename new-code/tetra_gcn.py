@@ -175,54 +175,81 @@ def Protein(adata):
 
 
 def tfidf(X):
-    """Compute TF-IDF matrix in CSR sparse format."""
-    idf = X.shape[0] / X.sum(axis=0)
+    """TF-IDF normalization (matching SpatialGlue / Seurat v3 approach)."""
+    col_sums = np.asarray(X.sum(axis=0)).ravel() if sp.issparse(X) else X.sum(axis=0)
+    col_sums = np.where(col_sums == 0, 1.0, col_sums)
+    idf = X.shape[0] / col_sums
     if sp.issparse(X):
-        tf = X.multiply(1 / X.sum(axis=1))
+        row_sums = np.asarray(X.sum(axis=1)).ravel()
+        row_sums = np.where(row_sums == 0, 1.0, row_sums)
+        tf = X.multiply(1.0 / row_sums[:, None])
         return sp.csr_matrix(tf.multiply(idf))
     else:
-        tf = X / X.sum(axis=1, keepdims=True)
+        row_sums = X.sum(axis=1, keepdims=True)
+        row_sums = np.where(row_sums == 0, 1.0, row_sums)
+        tf = X / row_sums
         return tf * idf
+
+
+def lsi(adata: anndata.AnnData, n_components: int = 20, use_highly_variable: Optional[bool] = None, **kwargs):
+    """LSI analysis (matching SpatialGlue / Seurat v3 approach)."""
+    if use_highly_variable is None:
+        use_highly_variable = "highly_variable" in adata.var
+    adata_use = adata[:, adata.var["highly_variable"]] if use_highly_variable else adata
+    X = tfidf(adata_use.X)
+    X_norm = sklearn.preprocessing.Normalizer(norm="l1").fit_transform(X)
+    X_norm = np.log1p(X_norm * 1e4)
+    X_lsi = sklearn.utils.extmath.randomized_svd(X_norm, n_components, **kwargs)[0]
+    X_lsi -= X_lsi.mean(axis=1, keepdims=True)
+    X_lsi_std = X_lsi.std(axis=1, ddof=1, keepdims=True)
+    X_lsi_std = np.where(X_lsi_std == 0, 1.0, X_lsi_std)
+    X_lsi /= X_lsi_std
+    adata.obsm["X_lsi"] = X_lsi[:, 1:]
 
 
 def preprocess_with_rna_pca(adata_RNA, adata_omics2, dataset_name, rna_pca_comps=60):
     """
-    Preprocessing with RNA PCA dimensionality reduction:
-      - RNA: Normalized, log-transformed, HVG filtered, then reduced via PCA (e.g. 60 or 100 comps).
-      - ADT/ATAC: CLR / TF-IDF + PCA.
+    Preprocessing matching SpatialGlue:
+      - RNA: filter_genes(10), filter_cells(min_genes=200) on ATAC, HVG(3000, seurat_v3),
+             normalize_total(1e4), log1p, scale, PCA(n_vars-1 on 10x / 50 on ATAC).
+      - ADT (10x): CLR -> scale -> PCA(n_vars-1).
+      - ATAC (Mouse Brain): HVG(3000, seurat_v3) -> LSI(n_components=51, use_highly_variable=False).
     """
-    # 1. Preprocess RNA
+    # 1. RNA preprocessing
     sc.pp.filter_genes(adata_RNA, min_cells=10)
+    if not dataset_name.startswith("10x"):
+        sc.pp.filter_cells(adata_RNA, min_genes=200)
+
     sc.pp.highly_variable_genes(adata_RNA, flavor="seurat_v3", n_top_genes=3000)
     sc.pp.normalize_total(adata_RNA, target_sum=1e4)
     sc.pp.log1p(adata_RNA)
     sc.pp.scale(adata_RNA)
 
     adata_RNA_high = adata_RNA[:, adata_RNA.var['highly_variable']].copy()
-    actual_pca_comps = min(rna_pca_comps, adata_RNA_high.n_vars, adata_RNA_high.n_obs - 1)
-    RNA_expression = pca(adata_RNA_high, n_comps=actual_pca_comps)
 
-    # 2. Preprocess second modality
+    # 2. Protein or ATAC preprocessing
     if dataset_name.startswith("10x"):
         adata_omics2 = adata_omics2[adata_RNA.obs_names].copy()
-        adata_omics2 = Protein(adata_omics2)
-        ADT_expression = adata_omics2.X
+        n_comps_10x = min(adata_omics2.n_vars - 1, adata_RNA_high.n_vars, adata_RNA_high.n_obs - 1)
+        RNA_expression = pca(adata_RNA_high, n_comps=n_comps_10x)
+
+        adata_omics2 = clr_normalize_each_cell(adata_omics2)
+        sc.pp.scale(adata_omics2)
+        ADT_expression = pca(adata_omics2, n_comps=min(adata_omics2.n_vars - 1, adata_omics2.n_obs - 1))
     else:
+        n_comps_atac = min(50, adata_RNA_high.n_vars, adata_RNA_high.n_obs - 1)
+        RNA_expression = pca(adata_RNA_high, n_comps=n_comps_atac)
+
         adata_omics2 = adata_omics2[adata_RNA.obs_names].copy()
-        adata_omics2.X = tfidf(adata_omics2.X)
-        if hasattr(sc.pp, "normalize_per_cell"):
-            sc.pp.normalize_per_cell(adata_omics2, counts_per_cell_after=1e4)
-        else:
-            sc.pp.normalize_total(adata_omics2, target_sum=1e4)
-        sc.pp.log1p(adata_omics2)
-        n_comps = min(60, adata_omics2.shape[1])
-        adata_omics2.obsm['feat'] = pca(adata_omics2, n_comps=n_comps)
-        ADT_expression = adata_omics2.obsm['feat']
+        if "X_lsi" not in adata_omics2.obsm:
+            sc.pp.highly_variable_genes(adata_omics2, flavor="seurat_v3", n_top_genes=3000)
+            lsi(adata_omics2, use_highly_variable=False, n_components=51)
+        ADT_expression = adata_omics2.obsm["X_lsi"].copy()
 
     if scipy.sparse.issparse(ADT_expression):
         ADT_expression = ADT_expression.toarray()
 
-    return RNA_expression, ADT_expression
+    return adata_RNA, RNA_expression, ADT_expression
 
 
 # ==============================================================================
@@ -1141,15 +1168,15 @@ def run_experiment(
         adata_omics2.var_names_make_unique()
 
         anno_df = pd.read_csv(annotation_path, index_col=0)
-        true_labels = anno_df[cfg["gt_col"]].values
-        adata_RNA.obs['ground_truth'] = pd.Categorical(true_labels)
-        num_clusters = int(adata_RNA.obs['ground_truth'].dropna().nunique())
-        print(f"Dataset: {dataset_name} | Spots: {adata_RNA.n_obs} | Clusters: {num_clusters}")
+        adata_RNA.obs['ground_truth'] = anno_df[cfg["gt_col"]]
 
-        # Preprocess with RNA PCA
-        RNA_expr, ADT_expr = preprocess_with_rna_pca(
+        # Preprocess matching SpatialGlue
+        adata_RNA, RNA_expr, ADT_expr = preprocess_with_rna_pca(
             adata_RNA, adata_omics2, dataset_name, rna_pca_comps=rna_pca_comps
         )
+        true_labels = adata_RNA.obs['ground_truth'].values
+        num_clusters = int(adata_RNA.obs['ground_truth'].dropna().nunique())
+        print(f"Dataset: {dataset_name} | Spots: {adata_RNA.n_obs} | Clusters: {num_clusters}")
         cell_positions = adata_RNA.obsm['spatial']
 
         # Construct 4-Encoder Graphs
